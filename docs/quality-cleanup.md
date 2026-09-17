@@ -32,6 +32,5 @@
 
 ## D. 待用户配合(不在本轮代码范围)
 
-- [ ] D1 dataplaneapi root 运行加固:节点上创建专用系统用户,配置 polkit/sudo 白名单仅允许
-      其执行 `systemctl reload haproxy` / `restart haproxy`,随后把 dataplaneapi.service 的
-      `User=root` 改为该用户并实机回归。需要用户在雨云节点配合执行命令。
+- [x] D1 dataplaneapi root 运行加固(2026-09-17 完成,并入 M5-4):雨云节点实机切换为专用用户
+      dpapi + sudo 白名单,配置写入 / sudo reload / 运行时操作回归通过;service 模板同步更新

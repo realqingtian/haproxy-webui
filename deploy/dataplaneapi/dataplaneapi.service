@@ -1,5 +1,12 @@
 # 每台 HAProxy 节点上运行的 dataplaneapi systemd 服务
 # 安装脚本见同目录 install.sh,配置文件 /etc/default/dataplaneapi 可覆盖参数
+#
+# 安全模型(M5-4 已实机验证):dataplaneapi 以专用非特权用户 dpapi 运行,不再使用 root:
+#   1. 节点创建用户:useradd -r -s /usr/sbin/nologin dpapi && usermod -aG haproxy dpapi
+#   2. /etc/haproxy 目录 root:dpapi 775、haproxy.cfg root:dpapi 664(dataplaneapi 需写配置)
+#   3. /etc/sudoers.d/dpapi:dpapi NOPASSWD 仅允许 systemctl reload/restart haproxy
+#   4. haproxy.cfg 的 stats socket 行追加 user dpapi group dpapi(socket 属主)
+#   5. ExecStartPre 负责 /tmp 下事务与 spoe 目录的属主(见下方单元)
 [Unit]
 Description=HAProxy Data Plane API
 Documentation=https://www.haproxy.com/documentation/dataplaneapi/
@@ -8,22 +15,22 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# 以 root 运行:dataplaneapi 需要重写 /etc/haproxy/haproxy.cfg、执行 systemctl reload、
-# 访问 root 属主的 runtime socket;用普通用户需配 polkit/sudo 白名单,列入 M4 加固项。
-User=root
-Group=root
+User=dpapi
+Group=dpapi
+# 事务与 spoe 临时目录属主(以 root 前置执行)
+ExecStartPre=+/bin/sh -c "mkdir -p /tmp/spoe-haproxy /tmp/haproxy && chown -R dpapi:dpapi /tmp/spoe-haproxy /tmp/haproxy"
 ExecStart=/usr/local/bin/dataplaneapi \
     --config-file /etc/haproxy/haproxy.cfg \
     --userlist dataplaneapi \
     --host 0.0.0.0 \
     --port 5555 \
     --haproxy-bin /usr/sbin/haproxy \
-    --reload-cmd "systemctl reload haproxy" \
-    --restart-cmd "systemctl restart haproxy"
+    --reload-cmd "sudo systemctl reload haproxy" \
+    --restart-cmd "sudo systemctl restart haproxy"
 EnvironmentFile=-/etc/default/dataplaneapi
 Restart=on-failure
 RestartSec=5
-NoNewPrivileges=true
+NoNewPrivileges=false
 
 [Install]
 WantedBy=multi-user.target

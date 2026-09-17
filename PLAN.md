@@ -78,8 +78,10 @@
       (含 Ingress / PVC(SQLite 持久化)/ Secret 密钥注入)
 - [ ] keepalived 降级方案(第一阶段):集群分组数据模型(cluster)+ 实例归组 + VIP 字段 +
       组内健康一览 UI;真实 VRRP 状态探测留接口,待第二台节点到位后接入
-- [ ] D1 dataplaneapi 脱离 root:由助手通过 SSH 在雨云节点直接实施(建专用用户 + sudo 白名单 +
-      文件属主调整 + service 改 User),完成后远程回归;回退预案为恢复 User=root
+- [x] D1 dataplaneapi 脱离 root(2026-09-17 雨云节点实机完成):专用用户 dpapi + sudo 白名单
+      (仅 reload/restart haproxy)+ /etc/haproxy 目录组写 + socket 属主 user/group 参数 +
+      ExecStartPre 修 /tmp 事务目录属主;回归:配置事务写入、sudo reload、运行时切换全部正常。
+      踩坑记录:sed -i 会重置文件属主;dataplaneapi 存 yaml/spoe 需目录级写权限(服务已加 ExecStartPre)
 
 ---
 
