@@ -9,13 +9,14 @@
 | 模块 | 你可以做什么 |
 |---|---|
 | 实例管理 | 注册多台 HAProxy 节点,一键连通性测试 |
-| 配置管理 | 可视化管理 frontend / backend / server / bind / ACL;每次保存自动校验、优雅 reload、记录版本快照 |
+| 配置管理 | 可视化管理 frontend / backend / server / bind / ACL;编辑先进入待提交清单,可预览统一 diff,攒够后一次事务批量提交(只触发一次 reload),失败整体回滚;每次提交自动记录版本快照 |
 | 运行时控制 | 服务器上线 / 维护 / 排空、调整权重——即时生效,不中断现有连接 |
 | 模板创建 | HTTP / TCP 负载均衡常用场景一键生成(frontend + backend + 服务器组) |
 | 版本历史 | 配置快照列表、查看历史原文、一键回滚(带并发保护);支持"从服务器同步"消除手工修改造成的漂移 |
-| 监控 | QPS / 连接数 / 流量 / 状态码实时大盘,10 秒自动刷新 |
+| 监控 | 单实例 QPS / 连接数 / 流量 / 状态码实时大盘(10 秒刷新);监控总览页聚合全部实例健康与速率,按集群分组,点击下钻 |
 | 用户与权限 | 三种角色:管理员 / 操作员 / 只读;实例凭据 AES 加密存储 |
 | 审计日志 | 谁在什么时候做了什么,全部可追溯 |
+| 体验细节 | 深色 / 浅色 / 跟随系统主题切换;大列表分页(审计日志、服务器表);前端按路由分包按需加载 |
 
 ## 快速开始(Docker Compose)
 
@@ -45,9 +46,11 @@ docker compose up -d --build
 2. **查看现状**:点实例行的「配置」,可以浏览该节点的 frontend / backend / server 全量清单和配置原文;「监控」页查看实时流量。
 3. **日常运维**:
    - 临时摘除一台后端:配置页中把该服务器的管理状态切为「维护」或「排空」——即时生效,重启后失效;
-   - 新增一套负载均衡:「从模板创建」选 HTTP 或 TCP,填名称、监听端口、服务器列表,一次提交;
+   - 新增一套负载均衡:「从模板创建」选 HTTP 或 TCP,填名称、监听端口、服务器列表;
    - 加减服务器、调整健康检查:在对应 backend 卡片里操作。
-4. **改错了?**:「版本历史」里每次保存都有快照,选一个时间点一键回滚。
+   - 以上编辑都不会立即生效:先进入「待提交清单」跨对话框累积,可逐条移除、diff 预览,
+     确认后一次提交——单个事务应用、只触发一次 reload,任一步失败整体回滚。
+4. **改错了?**:「版本历史」里每次提交都有快照,选一个时间点一键回滚。
 5. **团队协作**:管理员在「用户与权限」创建账号并分配角色;所有操作自动进入「审计日志」。
 
 **角色权限**
@@ -69,11 +72,13 @@ haproxy-webui/
 │   │   │   ├── layout/            # 应用布局(侧边导航 / 顶栏 / 修改密码)
 │   │   │   └── ui/                # shadcn/ui 基础组件
 │   │   ├── lib/                   # API 客户端(JWT 注入)、格式化工具
-│   │   ├── pages/                 # 页面:仪表盘 / 实例 / 配置 / 监控 / 审计 / 用户 / 登录
+│   │   ├── pages/                 # 页面:仪表盘 / 实例 / 配置 / 监控总览 / 单实例监控 / 审计 / 用户 / 登录
 │   │   ├── App.tsx                # 路由
 │   │   └── main.tsx               # 入口
 │   ├── Dockerfile                 # 前端镜像:bun 构建 + nginx 托管
-│   └── nginx.conf                 # 容器内 nginx:静态托管 + /api 反代后端
+│   ├── nginx.conf                 # 容器内 nginx:静态托管 + /api 反代后端
+│   ├── playwright.config.ts       # E2E 编排:local-e2e 容器 + 独立 DB 后端 + vite dev
+│   └── e2e/                       # Playwright 冒烟用例(核心链路)
 ├── backend/                       # 后端 BFF(Go + Gin + GORM + SQLite)
 │   ├── cmd/server/                # 程序入口
 │   ├── internal/
@@ -87,7 +92,7 @@ haproxy-webui/
 │   └── Dockerfile                 # 后端镜像:多阶段构建,纯静态二进制
 ├── deploy/
 │   ├── dataplaneapi/              # HAProxy 节点侧:一键安装脚本 / systemd / 配置片段
-│   │   └── local-e2e/             # 本地联调环境(单容器 HAProxy + dataplaneapi)
+│   │   └── local-e2e/             # 本地联调与测试环境(单容器 HAProxy + dataplaneapi,docker compose 化,集成/E2E 共用)
 │   ├── nginx/                     # 裸机部署的 nginx 站点配置
 │   ├── systemd/                   # 后端 systemd 服务单元
 │   ├── prometheus.md              # Prometheus 指标接入指引
@@ -110,6 +115,16 @@ cd frontend && bun install && bun run dev
 ```
 
 构建检查:`backend` 下 `go build ./... && go vet ./...`;`frontend` 下 `bun run build`。
+
+## 测试
+
+```bash
+make test               # 后端单测 + 进程内集成(无 Docker 依赖,always green)
+make test-integration   # 容器级集成:起 local-e2e(真实 HAProxy + dataplaneapi v3)跑真实链路
+make e2e                # Playwright E2E 冒烟:自动编排容器 + 独立 DB 后端 + vite dev,覆盖核心链路
+```
+
+E2E 首次运行需安装浏览器:`cd frontend && bunx playwright install chromium`;需要 Docker 运行,8080/5173 端口空闲。
 
 ## 生产部署
 

@@ -1,9 +1,10 @@
 # 本地端到端联调环境:单容器同时跑 HAProxy + dataplaneapi,模拟一台受管节点。
 # 构建参数与 WebUI 后端部署形态无关,Mac(Apple Silicon)默认 arm64,x86 机器用 --build-arg DPAPI_ARCH=x86_64
 #
-# 构建: docker build -t haproxy-dpapi-e2e .
-# 运行: docker run -d --name dpapi-e2e -p 5555:5555 -p 8404:8404 haproxy-dpapi-e2e
-# 验证: curl -u dataplaneapi:demosecret localhost:5555/v2/info
+# 启动(推荐,docker-compose.yml 带 healthcheck,集成/E2E 测试共用):
+#   docker compose up -d --wait
+# 验证: curl -u dataplaneapi:demosecret localhost:5555/v3/info
+#   (dataplaneapi 3.x 前缀是 /v3;2.x 才是 /v2)
 # WebUI 注册实例地址(docker desktop 下后端容器访问宿主端口):
 #   http://host.docker.internal:5555  用户 dataplaneapi  密码 demosecret
 # HAProxy stats 页: http://localhost:8404/stats

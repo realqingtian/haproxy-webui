@@ -8,6 +8,7 @@
 - `PLAN.md` 是进度与决策的唯一真源:完成任务后把对应项 `[ ]` 改为 `[x]` 并附日期与验证方式;未完成项保持不动。
 - `docs/ROADMAP.md` 是后续迭代的规划文档:规划期只改 ROADMAP,开工时把对应期任务搬进 PLAN.md 作为进度真源。
 - 工具链:前端用 bun,后端用 go(1.27+)。本地开发:`go run ./cmd/server`(:8080)+ `bun run dev`(:5173,/api 代理到 8080)。
+- 测试分三层:`make test`(单测 + 进程内集成,无 Docker 依赖)/ `make test-integration`(起 local-e2e 容器跑真实 dataplaneapi)/ `make e2e`(Playwright 冒烟,自动编排容器 + 独立 DB 后端 + vite)。
 
 ## Git 提交规范(必须遵守)
 
