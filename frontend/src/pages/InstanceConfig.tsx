@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { ClipboardList, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,15 +31,10 @@ import type {
   InstanceConfig,
   ServerView,
 } from '@/types'
-import {
-  AclDialog,
-  BackendDialog,
-  ConfirmDialog,
-  FrontendDialog,
-  ServerDialog,
-} from '@/components/config/dialogs'
+import { AclDialog, BackendDialog, FrontendDialog, ServerDialog } from '@/components/config/dialogs'
 import { TemplateDialog } from '@/components/config/TemplateDialog'
 import { RevisionsTab } from '@/components/config/RevisionsTab'
+import { StagingDialog, type StagedItem } from '@/components/config/StagingDialog'
 
 const ADMIN_STATE_LABELS: Record<AdminState, string> = {
   ready: '上线',
@@ -62,8 +57,15 @@ export default function InstanceConfigPage() {
   const [backendDialogOpen, setBackendDialogOpen] = useState(false)
   const [frontendDialog, setFrontendDialog] = useState<{ mode: 'create' | 'edit'; frontend?: { name: string; defaultBackend: string } } | null>(null)
   const [aclDialog, setAclDialog] = useState<{ parentType: 'frontends' | 'backends'; parent: string } | null>(null)
-  const [confirm, setConfirm] = useState<{ title: string; description: string; ops: ConfigOp[] } | null>(null)
   const [templateOpen, setTemplateOpen] = useState(false)
+  const [staged, setStaged] = useState<StagedItem[]>([])
+  const [stagingOpen, setStagingOpen] = useState(false)
+  const keySeq = useRef(0)
+
+  // 暂存与实例绑定:切换实例即清空,避免把 A 实例的操作应用到 B 实例
+  useEffect(() => {
+    setStaged([])
+  }, [id])
 
   const instances = useQuery({
     queryKey: ['instances'],
@@ -96,14 +98,28 @@ export default function InstanceConfigPage() {
     onSuccess: (r) => {
       toast.success(`配置已保存并触发 reload${r.reloadId ? `(${r.reloadId})` : ''}`)
       invalidateAll()
+      setStaged([])
+      setStagingOpen(false)
       setServerDialog(null)
       setBackendDialogOpen(false)
       setFrontendDialog(null)
       setAclDialog(null)
-      setConfirm(null)
+      setTemplateOpen(false)
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
   })
+
+  // 所有编辑操作先进入待提交清单,从清单一次事务批量提交(只触发一次 reload)
+  const addStaged = (ops: ConfigOp[]) => {
+    const items = ops.map((op) => ({ key: ++keySeq.current, op }))
+    setStaged((prev) => [...prev, ...items])
+    toast.success(`已加入待提交清单,当前共 ${staged.length + items.length} 条`)
+    setServerDialog(null)
+    setBackendDialogOpen(false)
+    setFrontendDialog(null)
+    setTemplateOpen(false)
+    // ACL 对话框保持打开,支持连续添加多条规则后一次提交
+  }
 
   const stateMutation = useMutation({
     mutationFn: (v: { backend: string; server: string; state: AdminState }) =>
@@ -127,20 +143,34 @@ export default function InstanceConfigPage() {
         <div>
           <h1 className="text-2xl font-bold">{instanceName} · 配置管理</h1>
           <p className="text-sm text-muted-foreground">
-            修改以事务提交:校验通过后优雅 reload,失败自动回滚;每次保存自动记录版本快照
+            编辑先进入待提交清单,可跨多个对话框累积;提交时在单个事务内应用——校验通过只触发一次优雅
+            reload,任一步失败整体回滚,每次提交自动记录版本快照
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            config.refetch()
-            raw.refetch()
-          }}
-        >
-          <RefreshCw className="mr-1 size-4" />
-          刷新
-        </Button>
+        <div className="flex gap-2">
+          {writable && (
+            <Button
+              variant={staged.length > 0 ? 'default' : 'outline'}
+              size="sm"
+              disabled={staged.length === 0}
+              onClick={() => setStagingOpen(true)}
+            >
+              <ClipboardList className="mr-1 size-4" />
+              待提交{staged.length > 0 ? `(${staged.length})` : ''}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              config.refetch()
+              raw.refetch()
+            }}
+          >
+            <RefreshCw className="mr-1 size-4" />
+            刷新
+          </Button>
+        </div>
       </div>
 
       {config.isLoading ? (
@@ -185,13 +215,6 @@ export default function InstanceConfigPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setAclDialog({ parentType: 'backends', parent: b.name })}
-                      >
-                        ACL
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
                         onClick={() => setServerDialog({ mode: 'create', backend: b.name })}
                       >
                         <Plus className="mr-1 size-3.5" />
@@ -201,14 +224,7 @@ export default function InstanceConfigPage() {
                         variant="outline"
                         size="sm"
                         className="text-red-600 hover:text-red-700"
-                        onClick={() =>
-                          setConfirm({
-                            title: `删除 backend ${b.name}`,
-                            description:
-                              '将从配置文件移除该 backend 及其中全部服务器并 reload。确定继续?',
-                            ops: [{ kind: 'delete_backend', name: b.name }],
-                          })
-                        }
+                        onClick={() => addStaged([{ kind: 'delete_backend', name: b.name }])}
                       >
                         <Trash2 className="size-3.5" />
                       </Button>
@@ -246,11 +262,9 @@ export default function InstanceConfigPage() {
                               setServerDialog({ mode: 'edit', backend: b.name, server: s })
                             }
                             onDelete={() =>
-                              setConfirm({
-                                title: `删除服务器 ${b.name}/${s.name}`,
-                                description: '将从配置文件移除该服务器并 reload。确定继续?',
-                                ops: [{ kind: 'delete_server', backend: b.name, name: s.name }],
-                              })
+                              addStaged([
+                                { kind: 'delete_server', backend: b.name, name: s.name },
+                              ])
                             }
                           />
                         ))}
@@ -324,14 +338,7 @@ export default function InstanceConfigPage() {
                               variant="outline"
                               size="sm"
                               className="text-red-600 hover:text-red-700"
-                              onClick={() =>
-                                setConfirm({
-                                  title: `删除 frontend ${f.name}`,
-                                  description:
-                                    '将从配置文件移除该前端及其监听并 reload,流量将不再从该入口进入。确定继续?',
-                                  ops: [{ kind: 'delete_frontend', name: f.name }],
-                                })
-                              }
+                              onClick={() => addStaged([{ kind: 'delete_frontend', name: f.name }])}
                             >
                               <Trash2 className="size-3.5" />
                             </Button>
@@ -369,7 +376,7 @@ export default function InstanceConfigPage() {
           key={`${serverDialog.backend}-${serverDialog.server?.name ?? 'new'}`}
           open
           onClose={() => setServerDialog(null)}
-          saving={applyMutation.isPending}
+          saving={false}
           backend={serverDialog.backend}
           initial={
             serverDialog.mode === 'edit'
@@ -381,24 +388,24 @@ export default function InstanceConfigPage() {
                 }
               : undefined
           }
-          onSubmit={applyMutation.mutate}
+          onSubmit={addStaged}
         />
       )}
       <BackendDialog
         open={backendDialogOpen}
         onClose={() => setBackendDialogOpen(false)}
-        saving={applyMutation.isPending}
-        onSubmit={applyMutation.mutate}
+        saving={false}
+        onSubmit={addStaged}
       />
       {frontendDialog && (
         <FrontendDialog
           key={frontendDialog.frontend?.name ?? 'new'}
           open
           onClose={() => setFrontendDialog(null)}
-          saving={applyMutation.isPending}
+          saving={false}
           backendOptions={backendNames}
           initial={frontendDialog.frontend}
-          onSubmit={applyMutation.mutate}
+          onSubmit={addStaged}
         />
       )}
       {aclDialog && (
@@ -406,11 +413,11 @@ export default function InstanceConfigPage() {
           instanceId={id!}
           parentType={aclDialog.parentType}
           parent={aclDialog.parent}
-          saving={applyMutation.isPending}
+          saving={false}
           onClose={() => setAclDialog(null)}
-          onSubmit={applyMutation.mutate}
+          onSubmit={addStaged}
           onDeleteAcl={(aclName) =>
-            applyMutation.mutate([
+            addStaged([
               {
                 kind: 'delete_acl',
                 parentType: aclDialog.parentType,
@@ -425,16 +432,18 @@ export default function InstanceConfigPage() {
       <TemplateDialog
         open={templateOpen}
         onClose={() => setTemplateOpen(false)}
-        saving={applyMutation.isPending}
-        onSubmit={applyMutation.mutate}
+        saving={false}
+        onSubmit={addStaged}
       />
-      <ConfirmDialog
-        open={confirm !== null}
-        onClose={() => setConfirm(null)}
+      <StagingDialog
+        open={stagingOpen}
+        instanceId={id!}
+        onClose={() => setStagingOpen(false)}
+        items={staged}
         saving={applyMutation.isPending}
-        title={confirm?.title ?? ''}
-        description={confirm?.description ?? ''}
-        onSubmit={() => confirm && applyMutation.mutate(confirm.ops)}
+        onRemove={(key) => setStaged((prev) => prev.filter((s) => s.key !== key))}
+        onClear={() => setStaged([])}
+        onCommit={() => applyMutation.mutate(staged.map((s) => s.op))}
       />
     </div>
   )

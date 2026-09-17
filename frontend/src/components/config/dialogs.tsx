@@ -299,34 +299,15 @@ export function AclDialog(props: DialogProps & {
               <Plus className="size-4" />
             </Button>
           </div>
-          <FormFooter saving={false} onClose={onClose} submitLabel="关闭" />
+          <DialogFooter>
+            {/* type=button:不能随表单提交,否则空字段时会把空操作加入暂存/直接 apply */}
+            <Button type="button" variant="outline" onClick={onClose}>
+              关闭
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
   )
 }
 
-// ConfirmDialog 通用删除确认
-export function ConfirmDialog(props: DialogProps & { title: string; description: string }) {
-  const { open, onClose, onSubmit, saving, title, description } = props
-  if (!open) return null
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            取消
-          </Button>
-          <Button variant="destructive" disabled={saving} onClick={() => onSubmit([])}>
-            {saving && <Loader2 className="mr-1 size-4 animate-spin" />}
-            删除
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
