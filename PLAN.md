@@ -66,6 +66,19 @@
 - [ ] OIDC / SSO 登录(需外部 IdP 接入条件,暂缓;JWT 体系已预留)
 - [ ] k8s 部署清单(当前部署形态 compose + systemd 已满足,待有 k8s 环境后补充)
 
+## M5 M4 收尾批次(2026-09-17 立项,四项全部开工)
+
+> 上批质量清理见 docs/quality-cleanup.md;本批四项来源:PLAN.md M4 暂缓项经重新评估后的解法。
+
+- [ ] OIDC / SSO 登录:标准 Authorization Code 流;本地 Docker 跑 dex 作开发 IdP 完整走通验证,
+      上线时仅替换 issuer / client-id / client-secret 环境配置;保留本地账号登录(可配置开关)
+- [ ] k8s 部署清单:Helm chart(或 kustomize)+ 镜像构建说明;本机 kind 集群真实部署验证
+      (含 Ingress / PVC(SQLite 持久化)/ Secret 密钥注入)
+- [ ] keepalived 降级方案(第一阶段):集群分组数据模型(cluster)+ 实例归组 + VIP 字段 +
+      组内健康一览 UI;真实 VRRP 状态探测留接口,待第二台节点到位后接入
+- [ ] D1 dataplaneapi 脱离 root:由助手通过 SSH 在雨云节点直接实施(建专用用户 + sudo 白名单 +
+      文件属主调整 + service 改 User),完成后远程回归;回退预案为恢复 User=root
+
 ---
 
 ## 已知风险与注意事项
