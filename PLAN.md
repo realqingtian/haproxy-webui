@@ -63,7 +63,9 @@
 - [x] 配置模板:HTTP / TCP 负载均衡一键生成(frontend+bind+backend+服务器组,单事务提交);实测 mode tcp 经 frontend POST 可写入
 - [x] Prometheus 指标接入:部署指引 deploy/prometheus.md(节点 prometheus-exporter 配置、抓取配置、常用指标与告警规则建议)
 - [ ] keepalived 主备集群视角展示(需节点实际部署 keepalived 环境,暂缓)
-- [ ] OIDC / SSO 登录(需外部 IdP 接入条件,暂缓;JWT 体系已预留)
+- [x] OIDC / SSO 登录:标准 Authorization Code + PKCE,按 email find-or-create(与本地账号隔离,默认 viewer);
+      后端 /api/auth/oidc/{status,start,callback},前端 SSO 按钮 + 回调页;
+      本地 dex 容器(deploy/dev-idp)完整走通浏览器验证,上线仅需替换 IdP 环境变量
 - [ ] k8s 部署清单(当前部署形态 compose + systemd 已满足,待有 k8s 环境后补充)
 
 ## M5 M4 收尾批次(2026-09-17 立项,四项全部开工)

@@ -8,6 +8,7 @@ import InstanceConfigPage from '@/pages/InstanceConfig'
 import InstanceStatsPage from '@/pages/InstanceStats'
 import InstancesPage from '@/pages/Instances'
 import LoginPage from '@/pages/Login'
+import OidcCallbackPage from '@/pages/OidcCallback'
 import UsersPage from '@/pages/Users'
 
 const queryClient = new QueryClient({
@@ -25,6 +26,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/oidc-callback" element={<OidcCallbackPage />} />
           <Route path="/" element={<AppLayout />}>
             <Route index element={<DashboardPage />} />
             <Route path="instances" element={<InstancesPage />} />

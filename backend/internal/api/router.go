@@ -28,10 +28,14 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	instanceHandler := NewInstanceHandler(db)
 	nodeHandler := NewNodeHandler(db)
 	userHandler := NewUserHandler(db)
+	oidcHandler := NewOidcHandler(cfg, db)
 
 	apiGroup := r.Group("/api")
 	{
 		apiGroup.POST("/auth/login", authHandler.Login)
+		apiGroup.GET("/auth/oidc/status", oidcHandler.Status)
+		apiGroup.GET("/auth/oidc/start", oidcHandler.Start)
+		apiGroup.GET("/auth/oidc/callback", oidcHandler.Callback)
 
 		protected := apiGroup.Group("", auth.Middleware(cfg.JWTSecret))
 		{

@@ -15,6 +15,13 @@ type Config struct {
 	AdminPassword string
 	EncryptionKey string // 实例凭据加密密钥;缺省从 JWT secret 派生
 	Strict        bool   // 严格生产模式:未自定义 JWT secret / 加密密钥时拒绝启动
+
+	// OIDC / SSO 登录(三者齐备即启用;开发环境见 deploy/dev-idp)
+	OidcIssuer       string // IdP issuer,如 http://localhost:5558/dex
+	OidcClientID     string
+	OidcClientSecret string
+	OidcRedirectURL  string // 回调地址,如 http://localhost:5173/api/auth/oidc/callback
+	OidcDefaultRole  string // OIDC 新用户的默认角色,缺省 viewer
 }
 
 func Load() Config {
@@ -26,6 +33,12 @@ func Load() Config {
 		AdminPassword: env("HAPROXY_WEBUI_ADMIN_PASSWORD", "admin123"),
 		EncryptionKey: env("HAPROXY_WEBUI_ENCRYPTION_KEY", ""),
 		Strict:        envBool("HAPROXY_WEBUI_STRICT"),
+
+		OidcIssuer:       env("HAPROXY_WEBUI_OIDC_ISSUER", ""),
+		OidcClientID:     env("HAPROXY_WEBUI_OIDC_CLIENT_ID", ""),
+		OidcClientSecret: env("HAPROXY_WEBUI_OIDC_CLIENT_SECRET", ""),
+		OidcRedirectURL:  env("HAPROXY_WEBUI_OIDC_REDIRECT_URL", "http://localhost:5173/api/auth/oidc/callback"),
+		OidcDefaultRole:  env("HAPROXY_WEBUI_OIDC_DEFAULT_ROLE", "viewer"),
 	}
 	if cfg.JWTSecret == "dev-insecure-secret" && !cfg.Strict {
 		log.Println("WARNING: using default JWT secret, set HAPROXY_WEBUI_JWT_SECRET in production")

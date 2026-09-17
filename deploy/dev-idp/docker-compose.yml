@@ -1,0 +1,11 @@
+# 本地开发 IdP(dex),供 OIDC 登录联调:docker compose -f deploy/dev-idp/docker-compose.yml up -d
+services:
+  dex:
+    image: ghcr.io/dexidp/dex:latest
+    container_name: dev-dex
+    restart: unless-stopped
+    command: ["dex", "serve", "/etc/dex/cfg/config.yaml"]
+    volumes:
+      - ./dex-config.yaml:/etc/dex/cfg/config.yaml:ro
+    ports:
+      - "5558:5558"

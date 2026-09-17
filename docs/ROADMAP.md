@@ -48,8 +48,10 @@
 ## v0.7 集群与生态(⚠️环境依赖,条件具备后排期)
 
 - [ ] ⚠️环境:keepalived 主备集群视角(VIP 状态、主备节点健康一览),需节点实际部署 keepalived
-- [ ] ⚠️环境:OIDC / SSO 登录(需公司 IdP 接入条件;JWT 体系已预留扩展点)
-- [ ] ⚠️环境:k8s 部署清单(Helm chart 或 kustomize),需 k8s 集群验证
+      (降级第一阶段:集群分组模型 + UI 已列入 M5)
+- [x] OIDC / SSO 登录(2026-09-17 提前至 M5 完成:标准 Authorization Code + PKCE,本地 dex 验证;
+      上线仅需替换 IdP 环境变量)
+- [ ] ⚠️环境:k8s 部署清单(Helm chart 或 kustomize),已提前至 M5,用本机 kind 集群验证
 - [ ] dataplaneapi 服务管理:节点上 dataplaneapi 进程状态展示与远程重启
   (依赖 systemd 接口方案设计)
 
