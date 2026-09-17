@@ -1,8 +1,9 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
+import { maybeRefreshToken } from '@/lib/api'
 import AppLayout from '@/components/layout/AppLayout'
 import DashboardPage from '@/pages/Dashboard'
 import InstancesPage from '@/pages/Instances'
@@ -14,6 +15,7 @@ const InstanceStatsPage = lazy(() => import('@/pages/InstanceStats'))
 const MonitoringPage = lazy(() => import('@/pages/Monitoring'))
 const AuditLogsPage = lazy(() => import('@/pages/AuditLogs'))
 const UsersPage = lazy(() => import('@/pages/Users'))
+const AlertsPage = lazy(() => import('@/pages/Alerts'))
 const OidcCallbackPage = lazy(() => import('@/pages/OidcCallback'))
 
 const queryClient = new QueryClient({
@@ -34,6 +36,13 @@ function RouteFallback() {
 }
 
 export default function App() {
+  // 会话滑动续期:挂载时及每 30 分钟检查一次,余量不足 12h 自动换新 token
+  useEffect(() => {
+    maybeRefreshToken()
+    const t = setInterval(() => maybeRefreshToken(), 30 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [])
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -49,6 +58,7 @@ export default function App() {
               <Route path="monitoring" element={<MonitoringPage />} />
               <Route path="audit-logs" element={<AuditLogsPage />} />
               <Route path="users" element={<UsersPage />} />
+              <Route path="alerts" element={<AlertsPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

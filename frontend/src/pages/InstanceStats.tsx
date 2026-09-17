@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,8 +22,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { api, ApiError } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { fmtBytes, fmtNum } from '@/lib/format'
-import type { Instance, StatItem } from '@/types'
+import type { Instance, MetricsProbeResult, StatItem } from '@/types'
 export default function InstanceStatsPage() {
   const { id } = useParams<{ id: string }>()
   const [serverPage, setServerPage] = useState(1)
@@ -37,6 +38,12 @@ export default function InstanceStatsPage() {
     queryFn: () => api<StatItem[]>(`/api/instances/${id}/stats`),
     refetchInterval: 10_000,
     enabled: !!id,
+  })
+  const metricsProbe = useQuery({
+    queryKey: ['metrics-probe', id],
+    queryFn: () => api<MetricsProbeResult>(`/api/instances/${id}/metrics-probe`),
+    enabled: !!id,
+    staleTime: 60_000,
   })
 
   const instanceName = instances.data?.find((i) => String(i.id) === id)?.name ?? `实例 ${id}`
@@ -103,6 +110,8 @@ export default function InstanceStatsPage() {
             <SummaryCard title="入流量" value={fmtBytes(totalBin)} />
             <SummaryCard title="出流量" value={fmtBytes(totalBout)} />
           </div>
+
+          <MetricsProbeCard probe={metricsProbe} />
 
           <Card>
             <CardHeader className="pb-3">
@@ -228,5 +237,56 @@ export default function InstanceStatsPage() {
         </>
       )}
     </div>
+  )
+}
+
+// MetricsProbeCard 展示节点 Prometheus /metrics 探测结果,未接入时给接入指引。
+function MetricsProbeCard({ probe }: { probe: UseQueryResult<MetricsProbeResult, Error> }) {
+  const Badge = probe.isLoading ? (
+    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+      <Loader2 className="size-3.5 animate-spin" />
+      正在探测…
+    </span>
+  ) : probe.isError ? (
+    <span className="inline-flex items-center gap-1.5 text-sm text-red-600">探测失败</span>
+  ) : probe.data?.ok ? (
+    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-600">
+      <span className="size-2 rounded-full bg-green-600" />
+      Prometheus metrics 可访问
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-yellow-600">
+      <span className="size-2 rounded-full bg-yellow-600" />
+      未接入
+    </span>
+  )
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center justify-between text-base">
+          Prometheus 探测
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="重新探测 metrics"
+            disabled={probe.isFetching}
+            onClick={() => probe.refetch()}
+          >
+            <RefreshCw className={cn('size-4', probe.isFetching && 'animate-spin')} />
+          </Button>
+        </CardTitle>
+        <CardDescription>检查节点 8404 /metrics 是否可访问(结果缓存 1 分钟)</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-1">
+        {Badge}
+        {probe.data && (
+          <p className="text-xs text-muted-foreground">
+            {probe.data.url || '—'} · {probe.data.detail}
+          </p>
+        )}
+        {probe.data?.hint && <p className="text-xs text-muted-foreground">{probe.data.hint}</p>}
+      </CardContent>
+    </Card>
   )
 }

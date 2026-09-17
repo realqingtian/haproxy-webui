@@ -42,6 +42,7 @@ interface InstanceForm {
   password: string
   enabled: boolean
   clusterId: number | null
+  metricsUrl: string
 }
 
 const EMPTY_FORM: InstanceForm = {
@@ -51,6 +52,7 @@ const EMPTY_FORM: InstanceForm = {
   password: '',
   enabled: true,
   clusterId: null,
+  metricsUrl: '',
 }
 
 export default function InstancesPage() {
@@ -94,6 +96,7 @@ export default function InstancesPage() {
         password: v.form.password,
         enabled: v.form.enabled,
         clusterId: v.form.clusterId,
+        metricsUrl: v.form.metricsUrl,
       })
       return v.id
         ? api<Instance>(`/api/instances/${v.id}`, { method: 'PUT', body })
@@ -156,6 +159,7 @@ export default function InstancesPage() {
       password: '',
       enabled: inst.enabled,
       clusterId: inst.clusterId,
+      metricsUrl: inst.metricsUrl ?? '',
     })
     setDialogOpen(true)
   }
@@ -382,6 +386,15 @@ export default function InstancesPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="inst-metrics">Metrics 地址(可选)</Label>
+              <Input
+                id="inst-metrics"
+                value={form.metricsUrl}
+                onChange={(e) => setForm({ ...form, metricsUrl: e.target.value })}
+                placeholder="留空则按节点地址的 8404 端口推导"
+              />
             </div>
             <div className="flex items-center gap-2">
               <Switch

@@ -19,8 +19,16 @@ export interface Instance {
   username: string
   enabled: boolean
   clusterId: number | null
+  metricsUrl: string
   createdAt: string
   updatedAt: string
+}
+
+export interface MetricsProbeResult {
+  ok: boolean
+  url: string
+  detail: string
+  hint?: string
 }
 
 export interface Cluster {
@@ -28,6 +36,31 @@ export interface Cluster {
   name: string
   vip: string
   note: string
+}
+
+export type AlertChannelType = 'feishu' | 'dingtalk' | 'wecom'
+
+export interface AlertChannel {
+  id: number
+  name: string
+  type: AlertChannelType
+  webhookUrl: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OpsSettings {
+  snapshotIntervalMinutes: number
+  monitorIntervalSeconds: number
+  alertCooldownMinutes: number
+  snapshotStatus: {
+    instanceId: number
+    instanceName: string
+    lastRunAt: string
+    result: string
+    detail: string
+  }[]
 }
 
 export interface InstanceTestResult {
@@ -108,6 +141,8 @@ export interface ConfigRevision {
   note: string
   createdBy: string
   createdAt: string
+  source?: 'manual' | 'sync' | 'scheduled' | ''
+  drifted?: boolean
 }
 
 export interface ACLView {

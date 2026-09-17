@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { Download, Loader2, RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -20,7 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Pagination } from '@/components/ui/pagination'
-import { api, ApiError } from '@/lib/api'
+import { api, ApiError, apiDownload } from '@/lib/api'
 import type { AuditLog } from '@/types'
 
 const ACTION_LABELS: Record<string, string> = {
@@ -38,24 +39,49 @@ const ACTION_LABELS: Record<string, string> = {
   'user.update': '修改用户',
   'user.delete': '删除用户',
   'user.password': '修改密码',
+  'user.force_logout': '强制下线',
+  'reload.failed': 'reload 失败',
+}
+
+// 组装过滤查询串(列表与 CSV 导出共用)
+function filterQuery(action: string, username: string, from: string, to: string): string {
+  const p = new URLSearchParams()
+  if (action) p.set('action', action)
+  if (username) p.set('username', username)
+  if (from) p.set('from', from)
+  if (to) p.set('to', to)
+  const qs = p.toString()
+  return qs ? `?${qs}` : ''
 }
 
 export default function AuditLogsPage() {
   const [action, setAction] = useState('')
   const [username, setUsername] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [page, setPage] = useState(1)
+  const [exporting, setExporting] = useState(false)
 
   const logs = useQuery({
-    queryKey: ['audit-logs', action, username],
-    queryFn: () => {
-      const p = new URLSearchParams()
-      if (action) p.set('action', action)
-      if (username) p.set('username', username)
-      const qs = p.toString()
-      return api<AuditLog[]>(`/api/audit-logs${qs ? `?${qs}` : ''}`)
-    },
+    queryKey: ['audit-logs', action, username, from, to],
+    queryFn: () =>
+      api<AuditLog[]>(`/api/audit-logs${filterQuery(action, username, from, to)}`),
     refetchInterval: 30_000,
   })
+
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      await apiDownload(
+        `/api/audit-logs/export${filterQuery(action, username, from, to)}`,
+        `audit-logs-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`,
+      )
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : '导出失败')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const list = logs.data ?? []
 
@@ -72,6 +98,10 @@ export default function AuditLogsPage() {
           <h1 className="text-2xl font-bold">审计日志</h1>
           <p className="text-sm text-muted-foreground">最近 200 条,每 30 秒自动刷新</p>
         </div>
+        <Button variant="outline" size="sm" disabled={exporting} onClick={exportCsv}>
+          {exporting ? <Loader2 className="mr-1 size-4 animate-spin" /> : <Download className="mr-1 size-4" />}
+          导出 CSV
+        </Button>
         <Button variant="outline" size="sm" onClick={() => logs.refetch()}>
           <RefreshCw className="mr-1 size-4" />
           刷新
@@ -80,7 +110,7 @@ export default function AuditLogsPage() {
 
       <Card>
         <CardContent className="pt-6 space-y-4">
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <Select
               value={action}
               onValueChange={(v) => setAction(v === 'all' ? '' : v)}
@@ -103,6 +133,35 @@ export default function AuditLogsPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
+            <div className="flex items-center gap-2">
+              <Input
+                type="datetime-local"
+                className="w-56"
+                aria-label="开始时间"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+              <span className="text-sm text-muted-foreground">至</span>
+              <Input
+                type="datetime-local"
+                className="w-56"
+                aria-label="结束时间"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+              />
+              {(from || to) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setFrom('')
+                    setTo('')
+                  }}
+                >
+                  清除
+                </Button>
+              )}
+            </div>
           </div>
 
           {logs.isLoading ? (

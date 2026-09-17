@@ -4,6 +4,7 @@ import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import {
   Activity,
+  BellRing,
   ChevronDown,
   KeyRound,
   LayoutDashboard,
@@ -53,6 +54,7 @@ interface NavItem {
   enabled: boolean
   match?: (pathname: string) => boolean
   special?: 'config'
+  adminOnly?: boolean
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -68,6 +70,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: '监控总览', icon: Activity, to: '/monitoring', enabled: true },
   { label: '审计日志', icon: ScrollText, to: '/audit-logs', enabled: true },
   { label: '用户与权限', icon: Settings, to: '/users', enabled: true },
+  { label: '告警与巡检', icon: BellRing, to: '/alerts', enabled: true, adminOnly: true },
 ]
 
 const ROLE_LABELS: Record<string, string> = {
@@ -121,6 +124,7 @@ export default function AppLayout() {
     return <Navigate to="/login" replace />
   }
 
+  const visibleNav = NAV_ITEMS.filter((i) => !i.adminOnly || me?.role === 'admin')
   const current =
     NAV_ITEMS.find((i) => i.match?.(location.pathname))?.label ??
     NAV_ITEMS.find((i) => i.to && i.to !== '/' && location.pathname.startsWith(i.to))?.label ??
@@ -134,7 +138,7 @@ export default function AppLayout() {
           HAProxy WebUI
         </div>
         <nav className="flex-1 space-y-1 p-2">
-          {NAV_ITEMS.map((item) => {
+          {visibleNav.map((item) => {
             const active = item.match
               ? item.match(location.pathname)
               : !!item.to && item.to !== '/' && location.pathname.startsWith(item.to)
@@ -280,6 +284,7 @@ function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () =>
   const [oldPwd, setOldPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
   const [saving, setSaving] = useState(false)
+  const navigate = useNavigate()
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -289,10 +294,12 @@ function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () =>
         method: 'PUT',
         body: JSON.stringify({ oldPassword: oldPwd, newPassword: newPwd }),
       })
-      toast.success('密码已修改')
-      setOldPwd('')
-      setNewPwd('')
+      // 后端改密即吊销全部会话(含当前 token),必须重新登录
+      setToken(null)
+      localStorage.removeItem('haproxy-webui-user')
+      toast.success('密码已修改,请重新登录')
       onClose()
+      navigate('/login', { replace: true })
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : '请求失败')
     } finally {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Loader2, LogOut, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -57,6 +57,7 @@ export default function UsersPage() {
   const [dialog, setDialog] = useState<{ mode: 'create' | 'edit'; user?: User } | null>(null)
   const [form, setForm] = useState<UserForm>({ username: '', password: '', role: 'viewer' })
   const [deleting, setDeleting] = useState<User | null>(null)
+  const [loggingOut, setLoggingOut] = useState<User | null>(null)
 
   const users = useQuery({
     queryKey: ['users'],
@@ -86,6 +87,15 @@ export default function UsersPage() {
       toast.success('用户已删除')
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setDeleting(null)
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+  })
+
+  const forceLogoutMutation = useMutation({
+    mutationFn: (id: number) => api(`/api/users/${id}/force-logout`, { method: 'POST' }),
+    onSuccess: () => {
+      toast.success('已强制下线,该用户需重新登录')
+      setLoggingOut(null)
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
   })
@@ -156,6 +166,15 @@ export default function UsersPage() {
                       >
                         <Pencil className="mr-1 size-3.5" />
                         编辑
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-label={`强制下线 ${u.username}`}
+                        disabled={me?.username === u.username}
+                        onClick={() => setLoggingOut(u)}
+                      >
+                        <LogOut className="size-3.5" />
                       </Button>
                       <Button
                         variant="outline"
@@ -267,6 +286,30 @@ export default function UsersPage() {
             >
               {deleteMutation.isPending && <Loader2 className="mr-1 size-4 animate-spin" />}
               删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={loggingOut !== null} onOpenChange={(v) => !v && setLoggingOut(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>强制下线</DialogTitle>
+            <DialogDescription>
+              确定吊销「{loggingOut?.username}」的全部会话?该用户将被登出,需重新登录。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLoggingOut(null)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={forceLogoutMutation.isPending}
+              onClick={() => loggingOut && forceLogoutMutation.mutate(loggingOut.id)}
+            >
+              {forceLogoutMutation.isPending && <Loader2 className="mr-1 size-4 animate-spin" />}
+              强制下线
             </Button>
           </DialogFooter>
         </DialogContent>
