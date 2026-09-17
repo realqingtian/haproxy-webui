@@ -37,6 +37,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		{
 			protected.GET("/auth/me", authHandler.Me)
 			protected.PUT("/auth/password", userHandler.ChangePassword)
+			protected.GET("/health/instances", instanceHandler.Health)
 
 			admin := protected.Group("", auth.RequireRole(model.RoleAdmin))
 			{

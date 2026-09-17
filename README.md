@@ -148,6 +148,7 @@ HAProxy 自带 Prometheus 导出器,按 [deploy/prometheus.md](deploy/prometheus
 | `HAPROXY_WEBUI_DB` | `./data/haproxy-webui.db` | SQLite 路径 |
 | `HAPROXY_WEBUI_JWT_SECRET` | dev 默认值(**生产必改**) | JWT 签名密钥,`openssl rand -hex 32` |
 | `HAPROXY_WEBUI_ENCRYPTION_KEY` | 从 JWT secret 派生 | 实例凭据加密密钥,建议独立设置 |
+| `HAPROXY_WEBUI_STRICT` | `false` | 严格生产模式:`true` 时未自定义 JWT secret / 加密密钥则拒绝启动 |
 | `HAPROXY_WEBUI_ADMIN_USER` | `admin` | 首次启动种子管理员 |
 | `HAPROXY_WEBUI_ADMIN_PASSWORD` | `admin123` | 首次启动种子管理员密码 |
 

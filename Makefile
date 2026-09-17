@@ -1,4 +1,4 @@
-.PHONY: dev-backend dev-frontend build docker-up docker-down tunnel
+.PHONY: dev-backend dev-frontend build test check docker-up docker-down tunnel
 
 # 建立到受管节点的 SSH 隧道(本机 5555 → 服务器 5555),WebUI 经此访问 dataplaneapi
 tunnel:
@@ -13,6 +13,14 @@ dev-frontend:
 
 build:
 	cd backend && go build -o haproxy-webui ./cmd/server
+	cd frontend && bun run build
+
+# 提交前的统一检查入口(见 AGENTS.md / docs/git-conventions.md)
+test:
+	cd backend && go test ./...
+
+check: test
+	cd backend && go vet ./...
 	cd frontend && bun run build
 
 docker-up:

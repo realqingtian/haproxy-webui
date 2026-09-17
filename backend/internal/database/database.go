@@ -12,7 +12,9 @@ import (
 )
 
 func Open(path string) (*gorm.DB, error) {
-	return gorm.Open(sqlite.Open(path), &gorm.Config{
+	// WAL + busy_timeout:降低并发写下偶发 "database is locked" 的概率
+	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
+	return gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
 }

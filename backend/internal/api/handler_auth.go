@@ -16,12 +16,13 @@ import (
 const tokenTTL = 24 * time.Hour
 
 type AuthHandler struct {
-	cfg *config.Config
-	db  *gorm.DB
+	cfg      *config.Config
+	db       *gorm.DB
+	limiter  *loginLimiter
 }
 
 func NewAuthHandler(cfg *config.Config, db *gorm.DB) *AuthHandler {
-	return &AuthHandler{cfg: cfg, db: db}
+	return &AuthHandler{cfg: cfg, db: db, limiter: newLoginLimiter()}
 }
 
 type loginRequest struct {
@@ -36,24 +37,33 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	key := c.ClientIP() + "|" + req.Username
+	if h.limiter.Blocked(key) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "失败次数过多,请一分钟后再试"})
+		return
+	}
+
 	var user model.User
 	if err := h.db.Where("username = ?", req.Username).First(&user).Error; err != nil {
-		h.audit(c, 0, req.Username, "login.fail", req.Username, "unknown user")
+		h.limiter.Fail(key)
+		writeAudit(h.db, c, 0, req.Username, "login.fail", req.Username, "unknown user")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)) != nil {
-		h.audit(c, user.ID, user.Username, "login.fail", user.Username, "wrong password")
+		h.limiter.Fail(key)
+		writeAudit(h.db, c, user.ID, user.Username, "login.fail", user.Username, "wrong password")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
+	h.limiter.Reset(key)
 
 	token, err := auth.GenerateToken(h.cfg.JWTSecret, &user, tokenTTL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "issue token failed"})
 		return
 	}
-	h.audit(c, user.ID, user.Username, "login.ok", user.Username, "")
+	writeAudit(h.db, c, user.ID, user.Username, "login.ok", user.Username, "")
 	c.JSON(http.StatusOK, gin.H{"token": token, "user": user})
 }
 
@@ -65,11 +75,4 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, user)
-}
-
-func (h *AuthHandler) audit(c *gin.Context, userID uint, username, action, target, detail string) {
-	h.db.Create(&model.AuditLog{
-		UserID: userID, Username: username, Action: action,
-		Target: target, Detail: detail, IP: c.ClientIP(),
-	})
 }
