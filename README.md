@@ -92,10 +92,11 @@ haproxy-webui/
 │   ├── systemd/                   # 后端 systemd 服务单元
 │   ├── prometheus.md              # Prometheus 指标接入指引
 │   └── tunnel.sh                  # SSH 隧道备用方案(不开 5555 端口时,make tunnel)
+├── docs/                          # ROADMAP / M1–M5 计划归档 / 协作与质量文档
 ├── docker-compose.yml             # 整包编排(后端 + 前端 nginx)
 ├── Makefile                       # dev / build / docker-up / tunnel 快捷命令
 ├── AGENTS.md                      # AI 协作规范(提交规范等)
-└── PLAN.md                        # 开发进度与决策记录
+└── PLAN.md                        # 当前迭代进度与决策记录(M1–M5 已归档至 docs/)
 ```
 
 ## 本地开发
@@ -164,7 +165,8 @@ HAProxy 自带 Prometheus 导出器,按 [deploy/prometheus.md](deploy/prometheus
 
 ## 相关文档
 
-- [PLAN.md](PLAN.md) — 开发进度、里程碑与决策记录
+- [PLAN.md](PLAN.md) — 当前迭代进度与决策记录
+- [docs/PLAN-M1-M5.md](docs/PLAN-M1-M5.md) — M1–M5 里程碑进度与决策归档
 - [docs/ROADMAP.md](docs/ROADMAP.md) — 后续迭代路线图
 - [AGENTS.md](AGENTS.md) — AI 协作与提交规范
 - [deploy/prometheus.md](deploy/prometheus.md) — 监控接入

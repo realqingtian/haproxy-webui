@@ -73,7 +73,7 @@
 
 | 债 | 影响 | 偿还时机 |
 |---|---|---|
-| dataplaneapi 以 root 运行 | 节点安全面较大 | v0.6+:普通用户 + polkit/sudo 白名单 |
+| ~~dataplaneapi 以 root 运行~~ | 已于 M5-4 偿还(2026-09-17):专用用户 dpapi + sudo 白名单,雨云节点实机验证 | ✅ 完成 |
 | 实例凭据加密密钥缺省派生自 JWT secret | 换 JWT secret 会导致历史密文不可解 | v0.6:独立密钥必填校验 |
 | 前端单 chunk >500kB | 首屏加载略慢 | v0.5 打包分包项 |
 | local-e2e 容器内 haproxy 为 3.4、真实节点为 2.8 | 测试环境与生产行为有差异 | v0.6:e2e 镜像提供 2.8 tag |
