@@ -73,15 +73,17 @@
       Deployment+Service,前端 NodePort 30080);本机 kind 集群真实验证通过(nginx→backend→
       SQLite on PVC + WAL);kind-config.yaml 含 extraPortMappings
 
-## M5 M4 收尾批次(2026-09-17 立项,四项全部开工)
+## M5 M4 收尾批次(2026-09-17 立项并全部完成)
 
 > 上批质量清理见 docs/quality-cleanup.md;本批四项来源:PLAN.md M4 暂缓项经重新评估后的解法。
 
-- [ ] OIDC / SSO 登录:标准 Authorization Code 流;本地 Docker 跑 dex 作开发 IdP 完整走通验证,
+- [x] OIDC / SSO 登录:标准 Authorization Code 流;本地 Docker 跑 dex 作开发 IdP 完整走通浏览器验证
+      (登录 → 授权 → 回调 → 用户供给 admin@example.com/viewer → 进入系统);
       上线时仅替换 issuer / client-id / client-secret 环境配置;保留本地账号登录(可配置开关)
-- [ ] k8s 部署清单:Helm chart(或 kustomize)+ 镜像构建说明;本机 kind 集群真实部署验证
-      (含 Ingress / PVC(SQLite 持久化)/ Secret 密钥注入)
-- [ ] keepalived 降级方案(第一阶段):集群分组数据模型(cluster)+ 实例归组 + VIP 字段 +
+- [x] k8s 部署清单:kustomize 清单(namespace / Secret / PVC / 前后端 Deployment+Service /
+      NodePort 30080)+ kind-config.yaml;本机 kind 集群真实部署验证
+      (nginx → backend → SQLite on PVC + WAL 端到端通过)
+- [x] keepalived 降级方案(第一阶段):集群分组数据模型(cluster)+ 实例归组 + VIP 字段 +
       组内健康一览 UI;真实 VRRP 状态探测留接口,待第二台节点到位后接入
 - [x] D1 dataplaneapi 脱离 root(2026-09-17 雨云节点实机完成):专用用户 dpapi + sudo 白名单
       (仅 reload/restart haproxy)+ /etc/haproxy 目录组写 + socket 属主 user/group 参数 +

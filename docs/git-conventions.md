@@ -79,7 +79,9 @@ feat: added new stuff to backend and frontend and also fixed some things  ← �
 4. **只有用户明确要求时才提交**:用户说「提交」「commit」时执行 commit(仅本地);用户说
    「提交到 GitHub」「push」时才 commit + push。用户审查后提出修改意见的,先改完再等指令,
    不要自作主张提交。
-5. **PLAN.md 进度与代码变更同票**:完成计划任务时,同一提交或紧随的 `docs(plan):` 提交里更新对应复选框。
+5. **文档与代码同票**:任务完成时必须同步更新所有受影响的文档(PLAN.md / ROADMAP / README /
+   deploy 文档等,对照见 AGENTS.md「文档同步」一节),在同一提交或紧随的 `docs:` 提交里完成;
+   文档没同步视为任务未完成。
 6. 不要给提交附加 AI 署名、Co-Authored-By 等页脚,除非用户要求。
 7. 不 amend 已推送的提交、不 force push、不删除远程分支,除非用户明确要求。
 
