@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: haproxy-webui
+  labels:
+    app: backend
+spec:
+  replicas: 1 # SQLite 单写者,保持 1 副本
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: haproxy-webui-backend:dev
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: haproxy-webui-secret
+          env:
+            - name: HAPROXY_WEBUI_DB
+              value: /data/haproxy-webui.db
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: haproxy-webui-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: haproxy-webui
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 8080
+      targetPort: 8080

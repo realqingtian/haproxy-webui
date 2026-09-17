@@ -1,0 +1,12 @@
+# SQLite 数据持久化:kind 自带 local-path StorageClass,生产集群按需改 StorageClass/大小
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: haproxy-webui-data
+  namespace: haproxy-webui
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

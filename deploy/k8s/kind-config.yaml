@@ -1,0 +1,9 @@
+# kind 开发集群配置:把 NodePort 30080 映射到本机,便于直接访问前端
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP
