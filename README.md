@@ -164,6 +164,7 @@ HAProxy 自带 Prometheus 导出器,按 [deploy/prometheus.md](deploy/prometheus
 ## 相关文档
 
 - [PLAN.md](PLAN.md) — 开发进度、里程碑与决策记录
+- [docs/ROADMAP.md](docs/ROADMAP.md) — 后续迭代路线图
 - [AGENTS.md](AGENTS.md) — AI 协作与提交规范
 - [deploy/prometheus.md](deploy/prometheus.md) — 监控接入
 - [deploy/dataplaneapi/](deploy/dataplaneapi/) — 节点侧部署产物与本地联调环境
