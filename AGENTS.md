@@ -9,6 +9,7 @@
 - `docs/ROADMAP.md` 是后续迭代的规划文档:规划期只改 ROADMAP,开工时把对应期任务搬进 PLAN.md 作为进度真源。
 - 工具链:前端用 bun,后端用 go(1.27+)。本地开发:`go run ./cmd/server`(:8080)+ `bun run dev`(:5173,/api 代理到 8080)。
 - 测试分三层:`make test`(单测 + 进程内集成,无 Docker 依赖)/ `make test-integration`(起 local-e2e 容器跑真实 dataplaneapi)/ `make e2e`(Playwright 冒烟,自动编排容器 + 独立 DB 后端 + vite)。
+- 文档 lint:改完 Markdown 跑 `bunx markdownlint-cli --ignore node_modules --ignore .zcode '**/*.md'`,配置见 `.markdownlint.json`,保持零告警。
 
 ## Git 提交规范(必须遵守)
 
@@ -26,7 +27,7 @@
 文档没同步视为任务未完成:
 
 | 变更类型 | 必须更新的文档 |
-|---|---|
+| --- | --- |
 | 计划任务完成 / 状态变化 | `PLAN.md`(复选框 + 日期与验证方式)、`docs/ROADMAP.md`(如该项在路线图中) |
 | 新增 / 变更功能、接口、环境变量 | `README.md`(功能表、上手指南、环境变量表) |
 | 新增 / 变更部署产物(脚本、service、清单) | `deploy/` 下对应文档与 `README.md` 部署章节 |

@@ -8,7 +8,7 @@
 
 ## 2. 格式:Conventional Commits
 
-```
+```text
 <type>(<scope>): <subject>
 
 [optional body]
@@ -19,7 +19,7 @@
 ### type(必选,小写)
 
 | type | 用途 |
-|---|---|
+| --- | --- |
 | feat | 新功能 |
 | fix | 缺陷修复 |
 | docs | 仅文档(含 PLAN.md 进度更新) |
@@ -50,7 +50,7 @@ type 后加 `!`(如 `feat!:`),并在页脚写 `BREAKING CHANGE: <说明>`。
 
 ## 3. 示例(本项目真实语境)
 
-```
+```text
 feat(backend): add transaction-based config apply API
 fix(frontend): distinguish login 401 from session expiry
 fix(backend): accept 202 responses from dataplaneapi tx operations
@@ -62,7 +62,7 @@ deploy: add prometheus exporter guide for haproxy nodes
 
 反例(禁止):
 
-```
+```text
 update            ← 无信息量
 修复了一个bug      ← 非英文
 M3 finished       ← 非祈使语气、缺 type

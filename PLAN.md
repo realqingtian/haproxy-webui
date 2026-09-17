@@ -6,7 +6,7 @@
 ## 技术决策记录
 
 | 决策点 | 结论 | 说明 |
-|---|---|---|
+| --- | --- | --- |
 | 管理通道 | HAProxy 官方 Data Plane API(dataplaneapi sidecar) | 不自研 haproxy.cfg 解析器,与 HAProxy Enterprise GUI 同底座;要求 HAProxy ≥ 1.9,建议 2.6+ |
 | BFF 语言 | Go + Gin | 单二进制部署,CGO 关闭 |
 | 存储 | SQLite(GORM + 纯 Go 驱动) | 仅元数据:实例 / 用户 / 审计 |

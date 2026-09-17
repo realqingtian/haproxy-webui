@@ -7,7 +7,7 @@
 ## 功能总览
 
 | 模块 | 你可以做什么 |
-|---|---|
+| --- | --- |
 | 实例管理 | 注册多台 HAProxy 节点,一键连通性测试 |
 | 配置管理 | 可视化管理 frontend / backend / server / bind / ACL;编辑先进入待提交清单,可预览统一 diff,攒够后一次事务批量提交(只触发一次 reload),失败整体回滚;每次提交自动记录版本快照 |
 | 运行时控制 | 服务器上线 / 维护 / 排空、调整权重——即时生效,不中断现有连接 |
@@ -53,17 +53,17 @@ docker compose up -d --build
 4. **改错了?**:「版本历史」里每次提交都有快照,选一个时间点一键回滚。
 5. **团队协作**:管理员在「用户与权限」创建账号并分配角色;所有操作自动进入「审计日志」。
 
-**角色权限**
+### 角色权限
 
 | 角色 | 权限 |
-|---|---|
+| --- | --- |
 | 管理员 admin | 用户管理 + 全部操作 |
 | 操作员 operator | 实例、配置、运行时的写操作 |
 | 只读 viewer | 仅查看,所有写操作不可见 |
 
 ## 目录结构
 
-```
+```text
 haproxy-webui/
 ├── frontend/                      # 前端(React 19 + Vite + TS + shadcn/ui + Tailwind v4,bun 管理)
 │   ├── src/
@@ -149,6 +149,7 @@ sudo systemctl enable --now dataplaneapi
 ```
 
 > **安全要求**:dataplaneapi 端口(5555)等同于负载均衡器的完全控制权。
+>
 > - 最简单:在云安全组中把 5555 限制为仅 WebUI 服务器可达,**不要对公网开放**;
 > - 不开端口:使用 SSH 隧道,服务器信息填入 gitignored 的 `deploy/server.local.env` 后执行 `make tunnel`,实例地址填 `http://host.docker.internal:5555`。
 
@@ -159,7 +160,7 @@ HAProxy 自带 Prometheus 导出器,按 [deploy/prometheus.md](deploy/prometheus
 ## 环境变量(后端)
 
 | 变量 | 默认 | 说明 |
-|---|---|---|
+| --- | --- | --- |
 | `HAPROXY_WEBUI_PORT` | `8080` | 监听端口 |
 | `HAPROXY_WEBUI_DB` | `./data/haproxy-webui.db` | SQLite 路径 |
 | `HAPROXY_WEBUI_JWT_SECRET` | dev 默认值(**生产必改**) | JWT 签名密钥,`openssl rand -hex 32` |

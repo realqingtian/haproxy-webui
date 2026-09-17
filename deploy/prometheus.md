@@ -7,7 +7,7 @@ HAProxy 自带 Prometheus 导出器(2.0+),无需额外 exporter 进程。
 在受管节点的 haproxy.cfg 中(或直接复用现有的 stats 监听)加一个使用
 prometheus-exporter 服务的 frontend:
 
-```
+```text
 listen stats
     bind *:8404
     stats enable
@@ -31,7 +31,7 @@ scrape_configs:
 ## 3. 常用指标
 
 | 指标前缀 | 含义 |
-|---|---|
+| --- | --- |
 | `haproxy_frontend_http_requests_total` | 前端请求总量 |
 | `haproxy_frontend_current_sessions` | 前端当前连接 |
 | `haproxy_backend_servers` | 后端服务器状态(1=UP,按 state 标签) |
