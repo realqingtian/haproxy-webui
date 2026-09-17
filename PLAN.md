@@ -55,9 +55,70 @@ reload,E2E 断言单条 reload);`go test ./...` 进 `make test`(容器级用例�
 无 Docker 自动跳过)、E2E 冒烟进 `make e2e`(1 passed);两个实例时选择器正常工作(rainyun-rcs + local-e2e
 容器实测,选择器带健康点直达配置页)。
 
-**当前状态**:M1–M5 与 v0.5 已全部完成(2026-09-17,M1–M5 存档见
-[docs/PLAN-M1-M5.md](docs/PLAN-M1-M5.md));下一期规划在 [docs/ROADMAP.md](docs/ROADMAP.md),
-开工时把任务搬入本文件。
+**当前状态**:M1–M5、v0.5 与 v0.6 均已完成(2026-09-17;M1–M5 存档见
+[docs/PLAN-M1-M5.md](docs/PLAN-M1-M5.md));v0.6 仅余真机走查一项(见下方 v0.6 段末),
+需要用户提供群机器人 webhook 并授权节点操作;改动全部停留工作区待审查。
+
+## v0.6 运维与可观测(2026-09-17 开工)
+
+> 目标:从"管理配置"扩展到"运维保障",具备告警与巡检能力。任务来源:docs/ROADMAP.md v0.6 段,
+> 实施顺序即下列顺序。
+
+- [x] 基础设施:优雅停机(`http.Server` + signal)+ `Setting` 设置表与 `GET/PUT /api/settings`
+      (admin),快照周期 / 探测周期 / 告警冷却存 DB,改完即生效无需重启
+      (2026-09-17 T1 完成:main.go 改 http.Server + NotifyContext 优雅停机;scheduler 15s tick
+       骨架;settings 包 upsert/默认值回落/巡检状态 JSON 存取,单测覆盖往返;
+       GET settings 登录可读、PUT 仅 admin,后端 build/vet/test 全绿)
+- [x] 会话管理:JWT 刷新与主动吊销——`User.TokenVersion` + Claims.Ver,中间件逐请求校验用户存在
+      且版本一致;改密 / 重置密码 / 删除用户 / 强制下线即吊销全部旧 token;
+      `POST /api/auth/refresh` 滑动续期(前端余量 <12h 自动刷新);用户页「强制下线」
+      (2026-09-17 T2 完成:中间件逐请求 DB 校验,角色以 DB 实时为准——改角色无需重登立即生效
+       (集成测试断言);改密后旧 token 401、重置 / 删除 / 强制下线同效(均测试覆盖);
+       前端余量 <12h 自动刷新(挂载 + 30 分钟周期)、改密成功即回登录页、用户页强制下线按钮;
+       前后端 build / test 全绿)
+- [x] 审计日志增强:`from`/`to` 时间过滤(CreatedAt 加索引)+ CSV 导出(同过滤条件,上限 1 万行,
+      UTF-8 BOM);前端 datetime-local 起止输入 + 导出按钮
+      (2026-09-17 T3 完成:内联 handler 迁至 handler_audit.go,from/to 接受 RFC3339 与
+       datetime-local 两种精度,非法值 400(测试覆盖);CSV 带 BOM、含表头与全部过滤条件
+       (测试覆盖);前端时间范围 + 清除按钮 + 导出按钮(apiDownload 鉴权下载),
+       操作类型下拉补强制下线 / reload 失败)
+- [x] Prometheus 探测:实例可选 `MetricsURL`(空则按 BaseURL host 推导 :8404),GET /metrics 探活;
+      `GET /api/instances/:id/metrics-probe`;实例监控页探测卡片 + 未接入指引
+      (2026-09-17 T4 完成:地址推导规则含显式基地址 / 已带 /metrics / 推导失败四类
+       (单测覆盖);probe 接口返回 ok/url/detail/hint,HTTP 200 且内容含 haproxy 指标才算可达
+       (集成测试正反例覆盖);实例监控页探测卡片(结果缓存 1 分钟 + 手动重测),
+       实例对话框新增「Metrics 地址(可选)」)
+- [x] 配置快照定时抓取:`ConfigRevision.Source`(manual/sync/scheduled)+ Drifted;scheduler 周期拉
+      raw 与最近快照比对,仅漂移或无基线时落新快照(防膨胀),巡检状态(每实例 lastRun/结果)写
+      Setting;RevisionsTab 来源列 + 漂移徽标 + 巡检状态
+      (2026-09-17 T5 完成:CaptureRevision 与 gin 解耦供 handler/巡检共用;巡检三阶段
+       基线/无变化不落/漂移落快照打标 + 节点不可达记 error(单测覆盖);巡检状态聚合 JSON 落
+       Setting 并经 /api/settings 透出;快照列表新增来源列与漂移徽标,版本历史页顶部显示巡检状态)
+- [x] 告警通知:`AlertChannel`(飞书 / 钉钉 / 企业微信,text 消息)+ `internal/notify` fan-out +
+      测试发送接口;触发源:reload 失败(提交后后台轮询 ReloadStatus 至终态)、连通性探测失败、
+      backend 全 DOWN——均边沿触发 + 恢复通知 + 冷却时间;新导航页「告警与巡检」(admin)
+      (2026-09-17 T6 完成:三种渠道 payload 形状单测;fan-out 只发启用渠道、单渠道失败不影响
+       其他(单测);监控边沿触发测试覆盖首轮静默 / 翻转告警 / 恢复告警 / 节点失联恢复;
+       reload 失败进程内全链路测试(fake 返回 failed → webhook 收到推送 + 审计 reload.failed);
+       「告警与巡检」页含渠道 CRUD / 测试发送 / 巡检周期设置 / 巡检状态表,导航仅 admin 可见;
+       顺带修复 gorm default:true 吞掉显式 false 的隐患(Instance/AlertChannel.Enabled 去 default 标签))
+- [x] 技术债:独立加密密钥(ENCRYPTION_KEY 非空时密钥仅由其派生,启动时旧钥密文自动迁移重加密,
+      EncryptStored 失败不再静默降级明文,compose 密钥必填);local-e2e 镜像提供 haproxy 2.8
+      (alpine 3.19,build-arg 可切回最新)
+      (2026-09-17 T7 完成:独立密钥下轮换 JWT secret 凭据不受影响、TryMigrateCiphertext 三态与
+       DB 级迁移幂等(单测覆盖);EncryptStored 改返回错误由 handler 500 兜底;docker-compose 的
+       ENCRYPTION_KEY 改 :? 必填;local-e2e 默认 alpine 3.19 = HAProxy 2.8.16,容器级集成测试
+       在 2.8 下全链路通过,ALPINE_VERSION=3 可切回最新 haproxy)
+- [x] 收尾:fake dataplaneapi 补 reloads/:id(reloads 状态可注入 failed);测试补齐(吊销 / 刷新 /
+      审计过滤 / CSV / settings RBAC / 渠道 payload / 巡检漂移 / 边沿告警 / probe / 密钥迁移 /
+      reload 失败全链路);make test / test-integration / e2e 全绿;README / ROADMAP / .env.example
+      / compose 文档同步
+      (2026-09-17 收尾完成:后端 go test 六包全绿,make test-integration 在 haproxy 2.8 容器下通过,
+       Playwright 两条冒烟 2 passed(核心链路 + 告警与巡检);文档四处同步完毕)
+- [ ] 真机验收:雨云节点人为制造 reload 失败收通知、改密后旧 token 失效走查
+      (自动化等价验证已达成,见上;真机走查需用户提供群机器人 webhook 并授权节点操作,待执行)
+
+**验收**(ROADMAP):人为制造 reload 失败能收到通知;改密后旧 token 失效。
 
 ## 已知风险与注意事项(仍然有效)
 
@@ -69,4 +130,6 @@ reload,E2E 断言单条 reload);`go test ./...` 进 `make test`(容器级用例�
 4. **JWT 密钥**:默认 dev 密钥仅限本地,生产必须通过环境变量覆盖(compose 中已强制校验)。
 5. **dataplaneapi 版本差异**:3.x 的 API 前缀是 `/v3`(2.x 为 `/v2`),探活为 `/v3/info`;release 资产命名中 64 位 x86 是 `x86_64`(amd64 只有包管理器格式)。BFF 客户端已对齐 v3,接入新版本节点时注意回归。
 6. **前端 401 语义**:登录接口的 401(密码错误)与其它接口的 401(会话过期)必须区分,api.ts 已通过 `authRedirect` 选项处理,新增登录类接口(如 OIDC 回调)时注意沿用。
-7. **实例凭据加密密钥**:缺省从 JWT secret 派生,换 JWT secret 会导致历史密文不可解;生产应显式设置 HAPROXY_WEBUI_ENCRYPTION_KEY(ROADMAP 技术债:v0.6 独立密钥必填校验)。
+7. **实例凭据加密密钥**:v0.6 起生产(compose)强制要求独立的 HAPROXY_WEBUI_ENCRYPTION_KEY;
+   独立密钥生效后密钥不再依赖 JWT secret(轮换 JWT secret 不影响凭据),首次启动自动迁移历史密文;
+   本地开发不设置时仍回落旧派生并告警,STRICT 模式拒绝启动。

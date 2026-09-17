@@ -12,10 +12,13 @@
 | 配置管理 | 可视化管理 frontend / backend / server / bind / ACL;编辑先进入待提交清单,可预览统一 diff,攒够后一次事务批量提交(只触发一次 reload),失败整体回滚;每次提交自动记录版本快照 |
 | 运行时控制 | 服务器上线 / 维护 / 排空、调整权重——即时生效,不中断现有连接 |
 | 模板创建 | HTTP / TCP 负载均衡常用场景一键生成(frontend + backend + 服务器组) |
-| 版本历史 | 配置快照列表、查看历史原文、一键回滚(带并发保护);支持"从服务器同步"消除手工修改造成的漂移 |
-| 监控 | 单实例 QPS / 连接数 / 流量 / 状态码实时大盘(10 秒刷新);监控总览页聚合全部实例健康与速率,按集群分组,点击下钻 |
-| 用户与权限 | 三种角色:管理员 / 操作员 / 只读;实例凭据 AES 加密存储 |
-| 审计日志 | 谁在什么时候做了什么,全部可追溯 |
+| 版本历史 | 配置快照列表(标记手动 / 同步 / 定时巡检来源)、查看历史原文、一键回滚(带并发保护);支持"从服务器同步"消除漂移 |
+| 定时巡检 | 后台按可配周期抓取节点配置,与最近快照比对,发现绕过 WebUI 的手工修改即落「漂移」快照并显著标出 |
+| 监控 | 单实例 QPS / 连接数 / 流量 / 状态码实时大盘(10 秒刷新);监控总览页聚合全部实例健康与速率,按集群分组,点击下钻;实例监控页可探测节点 Prometheus /metrics 是否可访问并给接入指引 |
+| 告警通知 | reload 失败、节点连通性探测失败、backend 全部 DOWN 时推送飞书 / 钉钉 / 企业微信机器人 webhook(可配多渠道、可发测试消息;边沿触发 + 恢复通知 + 冷却防刷屏) |
+| 用户与权限 | 三种角色:管理员 / 操作员 / 只读;实例凭据 AES 加密存储;管理员可强制下线任意账号 |
+| 会话安全 | JWT 滑动续期;改密 / 重置密码 / 删除用户 / 强制下线后全部旧会话立即失效;改角色即时生效 |
+| 审计日志 | 谁在什么时候做了什么,全部可追溯;支持时间范围过滤与 CSV 导出 |
 | 体验细节 | 深色 / 浅色 / 跟随系统主题切换;大列表分页(审计日志、服务器表);前端按路由分包按需加载 |
 
 ## 快速开始(Docker Compose)
@@ -52,6 +55,8 @@ docker compose up -d --build
      确认后一次提交——单个事务应用、只触发一次 reload,任一步失败整体回滚。
 4. **改错了?**:「版本历史」里每次提交都有快照,选一个时间点一键回滚。
 5. **团队协作**:管理员在「用户与权限」创建账号并分配角色;所有操作自动进入「审计日志」。
+6. **放着别管也不掉链**:管理员在「告警与巡检」里配置周期与群机器人 webhook——
+   节点配置被人手工改动(漂移)会定期抓快照留痕,reload 失败 / 节点失联 / backend 全 DOWN 会推送到群里。
 
 ### 角色权限
 
@@ -72,7 +77,7 @@ haproxy-webui/
 │   │   │   ├── layout/            # 应用布局(侧边导航 / 顶栏 / 修改密码)
 │   │   │   └── ui/                # shadcn/ui 基础组件
 │   │   ├── lib/                   # API 客户端(JWT 注入)、格式化工具
-│   │   ├── pages/                 # 页面:仪表盘 / 实例 / 配置 / 监控总览 / 单实例监控 / 审计 / 用户 / 登录
+│   │   ├── pages/                 # 页面:仪表盘 / 实例 / 配置 / 监控总览 / 单实例监控 / 审计 / 用户 / 告警与巡检 / 登录
 │   │   ├── App.tsx                # 路由
 │   │   └── main.tsx               # 入口
 │   ├── Dockerfile                 # 前端镜像:bun 构建 + nginx 托管
@@ -80,15 +85,18 @@ haproxy-webui/
 │   ├── playwright.config.ts       # E2E 编排:local-e2e 容器 + 独立 DB 后端 + vite dev
 │   └── e2e/                       # Playwright 冒烟用例(核心链路)
 ├── backend/                       # 后端 BFF(Go + Gin + GORM + SQLite)
-│   ├── cmd/server/                # 程序入口
+│   ├── cmd/server/                # 程序入口(优雅停机)
 │   ├── internal/
-│   │   ├── api/                   # 路由与各模块 handler(auth / 实例 / 配置 / 用户 / 审计)
-│   │   ├── auth/                  # JWT 签发校验 + RBAC 角色中间件
+│   │   ├── api/                   # 路由与各模块 handler(auth / 实例 / 配置 / 用户 / 审计 / 告警 / 设置)
+│   │   ├── auth/                  # JWT 签发校验(含会话吊销)+ RBAC 角色中间件
 │   │   ├── config/                # 环境变量配置
-│   │   ├── cryptoutil/            # 实例凭据 AES-256-GCM 加解密
+│   │   ├── cryptoutil/            # 实例凭据 AES-256-GCM 加解密(独立密钥 + 历史密文迁移)
 │   │   ├── database/              # SQLite 连接 / 自动迁移 / 种子管理员
 │   │   ├── dataplane/             # dataplaneapi 客户端(配置 / 事务 / 运行时 / stats)
-│   │   └── model/                 # 数据模型(用户 / 实例 / 审计 / 配置快照)
+│   │   ├── notify/                # 告警推送(飞书 / 钉钉 / 企业微信 webhook)
+│   │   ├── scheduler/             # 后台定时任务(快照巡检 / 健康探测 / 告警触发)
+│   │   ├── settings/              # 系统级键值配置(巡检周期等,运行时可改)
+│   │   └── model/                 # 数据模型(用户 / 实例 / 审计 / 配置快照 / 设置 / 告警渠道)
 │   └── Dockerfile                 # 后端镜像:多阶段构建,纯静态二进制
 ├── deploy/
 │   ├── dataplaneapi/              # HAProxy 节点侧:一键安装脚本 / systemd / 配置片段
@@ -164,7 +172,7 @@ HAProxy 自带 Prometheus 导出器,按 [deploy/prometheus.md](deploy/prometheus
 | `HAPROXY_WEBUI_PORT` | `8080` | 监听端口 |
 | `HAPROXY_WEBUI_DB` | `./data/haproxy-webui.db` | SQLite 路径 |
 | `HAPROXY_WEBUI_JWT_SECRET` | dev 默认值(**生产必改**) | JWT 签名密钥,`openssl rand -hex 32` |
-| `HAPROXY_WEBUI_ENCRYPTION_KEY` | 从 JWT secret 派生 | 实例凭据加密密钥,建议独立设置 |
+| `HAPROXY_WEBUI_ENCRYPTION_KEY` | 从 JWT secret 派生(仅限本地开发) | 实例凭据加密密钥,**生产必填且须与 JWT secret 不同**(compose 已强制);换 JWT secret 不影响已配置独立密钥的部署;首次配置后启动会自动迁移历史密文 |
 | `HAPROXY_WEBUI_STRICT` | `false` | 严格生产模式:`true` 时未自定义 JWT secret / 加密密钥则拒绝启动 |
 | `HAPROXY_WEBUI_ADMIN_USER` | `admin` | 首次启动种子管理员 |
 | `HAPROXY_WEBUI_ADMIN_PASSWORD` | `admin123` | 首次启动种子管理员密码 |
@@ -175,9 +183,13 @@ HAProxy 自带 Prometheus 导出器,按 [deploy/prometheus.md](deploy/prometheus
 
 **运行时改了服务器状态,reload 后又回去了?** 这是设计行为:上下线 / 排空 / 权重是运行时操作,即时生效但不写配置文件;需要永久生效请在配置管理中修改服务器定义。
 
-**配置被人在服务器上手工改过,界面显示不准?** 配置管理 → 版本历史 → 「从服务器同步」,以当前实际配置重建基线。
+**配置被人在服务器上手工改过,界面显示不准?** 配置管理 → 版本历史 → 「从服务器同步」,以当前实际配置重建基线。开启「告警与巡检」的快照巡检后,这类漂移会被定时任务自动发现并留下漂移快照。
 
-**HAProxy 版本有要求吗?** 需要 ≥ 1.9 且节点上运行 dataplaneapi(建议 HAProxy 2.6+、dataplaneapi 3.x,本平台按 v3 接口开发)。
+**怎么知道节点 reload 失败了?** 在「告警与巡检」添加飞书 / 钉钉 / 企业微信机器人渠道并点「测试」;此后配置提交触发的 reload 一旦失败(后台轮询确认),会推送告警并写入审计日志(`reload.failed`)。
+
+**改密 / 强制下线后旧会话还能用吗?** 不能。改密、管理员重置密码、删除用户、强制下线都会立即吊销该用户的全部 token;管理员改角色也即时生效,无需重新登录。
+
+**HAProxy 版本有要求吗?** 需要 ≥ 1.9 且节点上运行 dataplaneapi(建议 HAProxy 2.6+、dataplaneapi 3.x,本平台按 v3 接口开发;本地测试环境默认以 HAProxy 2.8 运行,与常见生产版本对齐)。
 
 ## 相关文档
 
