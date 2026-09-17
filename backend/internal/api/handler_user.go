@@ -99,6 +99,8 @@ func (h *UserHandler) Update(c *gin.Context) {
 			return
 		}
 		user.PasswordHash = string(hash)
+		// 密码被重置:吊销该用户全部旧会话
+		user.TokenVersion++
 	}
 	if err := h.db.Save(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -136,8 +138,29 @@ func (h *UserHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	audit(c, "user.delete", user.Username, "")
+	audit(c, "user.delete", user.Username, "账号已删除,会话全部失效")
 	c.JSON(http.StatusOK, gin.H{"deleted": user.ID})
+}
+
+// ForceLogout POST /api/users/:id/force-logout(仅 admin):吊销该用户全部会话
+func (h *UserHandler) ForceLogout(c *gin.Context) {
+	claims := auth.ClaimsFromContext(c)
+	var user model.User
+	if err := h.db.First(&user, c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	if claims != nil && user.ID == claims.UserID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "不能对当前登录的账号强制下线"})
+		return
+	}
+	user.TokenVersion++
+	if err := h.db.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	audit(c, "user.force_logout", user.Username, "")
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 type changePasswordRequest struct {
@@ -168,10 +191,12 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 	user.PasswordHash = string(hash)
+	// 改密即吊销全部会话(含当前 token),前端引导重新登录
+	user.TokenVersion++
 	if err := h.db.Save(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	audit(c, "user.password", user.Username, "self change")
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	audit(c, "user.password", user.Username, "self change, sessions revoked")
+	c.JSON(http.StatusOK, gin.H{"ok": true, "relogin": true})
 }

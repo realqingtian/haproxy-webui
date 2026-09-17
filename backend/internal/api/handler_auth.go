@@ -76,3 +76,20 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, user)
 }
+
+// Refresh POST /api/auth/refresh:为当前持有有效 token 的用户签发新 token(滑动续期)。
+// 存在性与代次校验已由中间件完成;不记审计避免刷日志。
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	claims := auth.ClaimsFromContext(c)
+	var user model.User
+	if err := h.db.First(&user, claims.UserID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+		return
+	}
+	token, err := auth.GenerateToken(h.cfg.JWTSecret, &user, tokenTTL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "issue token failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"token": token, "user": user})
+}

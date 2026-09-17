@@ -21,12 +21,13 @@ func NewInstanceHandler(db *gorm.DB) *InstanceHandler {
 }
 
 type instanceRequest struct {
-	Name      string `json:"name" binding:"required,max=64"`
-	BaseURL   string `json:"baseUrl" binding:"required,url"`
-	Username  string `json:"username" binding:"required"`
-	Password  string `json:"password"`
-	Enabled   *bool  `json:"enabled"`
-	ClusterID *uint  `json:"clusterId"` // 归属集群,可空(null/缺省 = 未分组)
+	Name       string `json:"name" binding:"required,max=64"`
+	BaseURL    string `json:"baseUrl" binding:"required,url"`
+	Username   string `json:"username" binding:"required"`
+	Password   string `json:"password"`
+	Enabled    *bool  `json:"enabled"`
+	ClusterID  *uint  `json:"clusterId"` // 归属集群,可空(null/缺省 = 未分组)
+	MetricsURL string `json:"metricsUrl"` // Prometheus metrics 基地址,可空(按 8404 推导)
 }
 
 func (h *InstanceHandler) List(c *gin.Context) {
@@ -44,11 +45,16 @@ func (h *InstanceHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	inst := model.Instance{Name: req.Name, BaseURL: req.BaseURL, Username: req.Username, Enabled: true, ClusterID: req.ClusterID}
+	inst := model.Instance{Name: req.Name, BaseURL: req.BaseURL, Username: req.Username, Enabled: true, ClusterID: req.ClusterID, MetricsURL: req.MetricsURL}
 	if req.Enabled != nil {
 		inst.Enabled = *req.Enabled
 	}
-	inst.Password = cryptoutil.EncryptStored(req.Password)
+	encPassword, err := cryptoutil.EncryptStored(req.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "凭据加密失败: " + err.Error()})
+		return
+	}
+	inst.Password = encPassword
 	if err := h.db.Create(&inst).Error; err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "instance name may already exist: " + err.Error()})
 		return
@@ -70,11 +76,22 @@ func (h *InstanceHandler) Update(c *gin.Context) {
 	}
 	inst.Name, inst.BaseURL, inst.Username = req.Name, req.BaseURL, req.Username
 	inst.ClusterID = req.ClusterID // 可置空 = 移出集群
+	inst.MetricsURL = req.MetricsURL
 	if req.Password != "" { // 留空表示不修改密码
-		inst.Password = cryptoutil.EncryptStored(req.Password)
+		encPassword, err := cryptoutil.EncryptStored(req.Password)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "凭据加密失败: " + err.Error()})
+			return
+		}
+		inst.Password = encPassword
 	} else {
 		// 历史明文凭据在下次编辑实例时自动迁移为密文
-		inst.Password = cryptoutil.EncryptStored(cryptoutil.DecryptStoredOrDefault(inst.Password))
+		encPassword, err := cryptoutil.EncryptStored(cryptoutil.DecryptStoredOrDefault(inst.Password))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "凭据加密失败: " + err.Error()})
+			return
+		}
+		inst.Password = encPassword
 	}
 	if req.Enabled != nil {
 		inst.Enabled = *req.Enabled

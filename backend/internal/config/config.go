@@ -43,9 +43,7 @@ func Load() Config {
 	if cfg.JWTSecret == "dev-insecure-secret" && !cfg.Strict {
 		log.Println("WARNING: using default JWT secret, set HAPROXY_WEBUI_JWT_SECRET in production")
 	}
-	if cfg.EncryptionKey == "" {
-		log.Println("WARNING: HAPROXY_WEBUI_ENCRYPTION_KEY not set, deriving credential key from JWT secret")
-	}
+	// ENCRYPTION_KEY 为空的告警在 main.go 中打印(密钥派生已移至 cryptoutil.Setup)
 	return cfg
 }
 

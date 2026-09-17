@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"haproxy-webui/backend/internal/config"
 	"haproxy-webui/backend/internal/cryptoutil"
@@ -27,7 +28,7 @@ const (
 	itDPPass    = "demosecret"
 )
 
-func newRouterDB(t *testing.T) *gin.Engine {
+func newRouterDB(t *testing.T) (*gin.Engine, *gorm.DB) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	// 与 main.go 一致的派生方式(JWTSecret:EncryptionKey),测试内保持同一 material
@@ -44,10 +45,16 @@ func newRouterDB(t *testing.T) *gin.Engine {
 		t.Fatalf("seed admin: %v", err)
 	}
 	cfg := &config.Config{JWTSecret: itJWTSecret, AdminUsername: "admin", AdminPassword: "admin123"}
-	return NewRouter(cfg, db)
+	return NewRouter(cfg, db), db
 }
 
 func newTestEnv(t *testing.T) (*gin.Engine, *fakeDataplane) {
+	r, fake, _ := newTestEnvWithDB(t)
+	return r, fake
+}
+
+// newTestEnvWithDB 额外暴露 BFF 所用的 DB,供需要预置数据(如告警渠道)的测试使用。
+func newTestEnvWithDB(t *testing.T) (*gin.Engine, *fakeDataplane, *gorm.DB) {
 	t.Helper()
 	fake := &fakeDataplane{
 		user: itDPUser, pw: itDPPass, version: 1,
@@ -58,7 +65,8 @@ func newTestEnv(t *testing.T) (*gin.Engine, *fakeDataplane) {
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
 	fake.url = srv.URL
-	return newRouterDB(t), fake
+	r, db := newRouterDB(t)
+	return r, fake, db
 }
 
 func doJSON(t *testing.T, r *gin.Engine, method, path, token string, body any) *httptest.ResponseRecorder {

@@ -28,7 +28,9 @@ type fakeDataplane struct {
 	starts    int
 	commits   int
 	aborts    int
-	lastPush  string // 最近一次 raw 整体推送(回滚路径)
+	lastPush  string             // 最近一次 raw 整体推送(回滚路径)
+	nextReload string             // 下一次 reload 查询返回的状态,默认 succeeded
+	reloadPolls int              // reloads/:id 被查询次数(验证监视器确实在轮询)
 }
 
 type stagedOp struct {
@@ -147,6 +149,14 @@ func (f *fakeDataplane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			list = append(list, map[string]any{"name": name, "default_backend": ""})
 		}
 		writeJSON(http.StatusOK, list)
+
+	case r.Method == http.MethodGet && strings.HasPrefix(path, "/v3/services/haproxy/reloads/"):
+		f.reloadPolls++
+		status := f.nextReload
+		if status == "" {
+			status = "succeeded"
+		}
+		writeJSON(http.StatusOK, map[string]any{"id": path[strings.LastIndex(path, "/")+1:], "status": status})
 
 	case r.Method == http.MethodGet && strings.HasSuffix(path, "/binds"):
 		writeJSON(http.StatusOK, []map[string]any{})

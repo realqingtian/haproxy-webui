@@ -30,6 +30,9 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	userHandler := NewUserHandler(db)
 	oidcHandler := NewOidcHandler(cfg, db)
 	clusterHandler := NewClusterHandler(db)
+	settingsHandler := NewSettingsHandler(db)
+	auditHandler := NewAuditHandler(db)
+	alertHandler := NewAlertHandler(db)
 
 	apiGroup := r.Group("/api")
 	{
@@ -38,13 +41,15 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		apiGroup.GET("/auth/oidc/start", oidcHandler.Start)
 		apiGroup.GET("/auth/oidc/callback", oidcHandler.Callback)
 
-			protected := apiGroup.Group("", auth.Middleware(cfg.JWTSecret))
-			{
-				protected.GET("/auth/me", authHandler.Me)
-				protected.PUT("/auth/password", userHandler.ChangePassword)
-				protected.GET("/health/instances", instanceHandler.Health)
+				protected := apiGroup.Group("", auth.Middleware(cfg.JWTSecret, db))
+				{
+					protected.GET("/auth/me", authHandler.Me)
+					protected.POST("/auth/refresh", authHandler.Refresh)
+					protected.PUT("/auth/password", userHandler.ChangePassword)
+					protected.GET("/health/instances", instanceHandler.Health)
+					protected.GET("/settings", settingsHandler.Get)
 
-				clusters := protected.Group("/clusters")
+					clusters := protected.Group("/clusters")
 				{
 					clusters.GET("", clusterHandler.List)
 					clusters.GET("/:id/health", clusterHandler.ClusterHealth)
@@ -62,6 +67,17 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				admin.POST("/users", userHandler.Create)
 				admin.PUT("/users/:id", userHandler.Update)
 				admin.DELETE("/users/:id", userHandler.Delete)
+				admin.POST("/users/:id/force-logout", userHandler.ForceLogout)
+				admin.PUT("/settings", settingsHandler.Update)
+
+				channels := admin.Group("/alert-channels")
+				{
+					channels.GET("", alertHandler.List)
+					channels.POST("", alertHandler.Create)
+					channels.PUT("/:id", alertHandler.Update)
+					channels.DELETE("/:id", alertHandler.Delete)
+					channels.POST("/:id/test", alertHandler.Test)
+				}
 			}
 
 			instances := protected.Group("/instances")
@@ -74,6 +90,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				instances.GET("/:id/config/revisions", nodeHandler.ListRevisions)
 				instances.GET("/:id/config/revisions/:revId/raw", nodeHandler.GetRevisionRaw)
 				instances.GET("/:id/stats", nodeHandler.Stats)
+				instances.GET("/:id/metrics-probe", nodeHandler.MetricsProbe)
 				instances.GET("/:id/acls", nodeHandler.ListNodeACLs)
 				instances.GET("/:id/reloads/:reloadId", nodeHandler.ReloadStatus)
 				// 写操作需要 operator 及以上角色
@@ -93,24 +110,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				}
 			}
 
-			protected.GET("/audit-logs", func(c *gin.Context) {
-				var logs []model.AuditLog
-				q := db.Order("id desc").Limit(200)
-				if action := c.Query("action"); action != "" {
-					q = q.Where("action = ?", action)
-				}
-				if username := c.Query("username"); username != "" {
-					q = q.Where("username = ?", username)
-				}
-				if target := c.Query("target"); target != "" {
-					q = q.Where("target LIKE ?", "%"+target+"%")
-				}
-				if err := q.Find(&logs).Error; err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-					return
-				}
-				c.JSON(http.StatusOK, logs)
-			})
+			protected.GET("/audit-logs", auditHandler.List)
+			protected.GET("/audit-logs/export", auditHandler.ExportCSV)
 		}
 	}
 

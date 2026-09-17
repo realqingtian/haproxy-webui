@@ -13,6 +13,8 @@ type Claims struct {
 	UserID   uint   `json:"uid"`
 	Username string `json:"username"`
 	Role     string `json:"role"`
+	// Ver 对应 User.TokenVersion,中间件逐请求比对以支持主动吊销
+	Ver      uint   `json:"ver"`
 	jwt.RegisteredClaims
 }
 
@@ -21,6 +23,7 @@ func GenerateToken(secret string, u *model.User, ttl time.Duration) (string, err
 		UserID:   u.ID,
 		Username: u.Username,
 		Role:     u.Role,
+		Ver:      u.TokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

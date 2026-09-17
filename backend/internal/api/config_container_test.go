@@ -15,7 +15,7 @@ import (
 // 容器不可达时自动跳过(保持 `go test ./...` 无 Docker 也能全绿);`make test-integration` 起 compose 后运行。
 func TestContainerRealDataplaneFlow(t *testing.T) {
 	base := containerEndpoint(t)
-	r := newRouterDB(t)
+	r, _ := newRouterDB(t)
 	token := loginToken(t, r, "admin", "admin123")
 
 	// 随机后缀:容器配置在多次运行间持久,避免重名冲突

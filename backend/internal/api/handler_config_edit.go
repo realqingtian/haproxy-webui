@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"haproxy-webui/backend/internal/auth"
 	"haproxy-webui/backend/internal/dataplane"
 	"haproxy-webui/backend/internal/model"
+	"haproxy-webui/backend/internal/scheduler"
 )
 
 // configOp 是一次配置变更操作,由前端对话框构造、后端在单个事务内执行。
@@ -124,12 +126,14 @@ func (h *NodeHandler) ApplyOps(c *gin.Context) {
 	}
 
 	note := truncateNote(strings.Join(summaries, ";"))
-	h.recordRevision(c, client, note)
+	h.recordRevision(c, client, note, model.RevisionSourceManual)
 	claims := auth.ClaimsFromContext(c)
 	h.db.Create(&model.AuditLog{
 		UserID: claims.UserID, Username: claims.Username, Action: "config.apply",
 		Target: c.Param("id"), Detail: note, IP: c.ClientIP(),
 	})
+	// 后台跟踪本次 reload:失败则告警 + 审计,不阻塞响应
+	go watchReloadStatus(h.db, c.Param("id"), client, reloadID, note)
 	c.JSON(http.StatusOK, gin.H{"ok": true, "reloadId": reloadID, "note": note})
 }
 
@@ -255,29 +259,22 @@ type revisionView struct {
 	Version   int64  `json:"version"`
 	Note      string `json:"note"`
 	CreatedBy string `json:"createdBy"`
+	Source    string `json:"source"`
+	Drifted   bool   `json:"drifted"`
 	CreatedAt string `json:"createdAt"`
 }
 
-// recordRevision 抓取节点当前配置存为快照。
-func (h *NodeHandler) recordRevision(c *gin.Context, client *dataplane.Client, note string) {
+// recordRevision 抓取节点当前配置存为快照(source 标记来源)。
+func (h *NodeHandler) recordRevision(c *gin.Context, client *dataplane.Client, note, source string) {
 	claims := auth.ClaimsFromContext(c)
-	ctx := c.Request.Context()
-	version, err := client.Version(ctx)
-	if err != nil {
-		return
-	}
-	raw, err := client.RawConfig(ctx)
-	if err != nil {
-		return
-	}
 	by := ""
 	if claims != nil {
 		by = claims.Username
 	}
-	h.db.Create(&model.ConfigRevision{
-		InstanceID: instanceIDFromPath(c), Version: version,
-		Note: note, CreatedBy: by, Raw: raw,
-	})
+	if _, _, err := scheduler.CaptureRevision(c.Request.Context(), h.db, client,
+		instanceIDFromPath(c), note, by, source, false); err != nil {
+		log.Printf("record revision: %v", err)
+	}
 }
 
 func instanceIDFromPath(c *gin.Context) uint {
@@ -291,7 +288,7 @@ func (h *NodeHandler) ListRevisions(c *gin.Context) {
 	var rows []model.ConfigRevision
 	if err := h.db.Where("instance_id = ?", instanceIDFromPath(c)).
 		Order("id desc").Limit(100).
-		Select("id, instance_id, version, note, created_by, created_at").
+		Select("id, instance_id, version, note, created_by, source, drifted, created_at").
 		Find(&rows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -300,7 +297,8 @@ func (h *NodeHandler) ListRevisions(c *gin.Context) {
 	for _, r := range rows {
 		out = append(out, revisionView{
 			ID: r.ID, Version: r.Version, Note: r.Note,
-			CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt.Format("2006-01-02 15:04:05"),
+			CreatedBy: r.CreatedBy, Source: r.Source, Drifted: r.Drifted,
+			CreatedAt: r.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
 	c.JSON(http.StatusOK, out)
@@ -325,7 +323,7 @@ func (h *NodeHandler) SyncRevision(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.recordRevision(c, client, "从服务器同步")
+	h.recordRevision(c, client, "从服务器同步", model.RevisionSourceSync)
 	audit(c, "config.sync", c.Param("id"), "")
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
@@ -356,7 +354,7 @@ func (h *NodeHandler) RollbackRevision(c *gin.Context) {
 		return
 	}
 	note := fmt.Sprintf("回滚到快照 #%d(v%d)", row.ID, row.Version)
-	h.recordRevision(c, client, note)
+	h.recordRevision(c, client, note, model.RevisionSourceManual)
 	audit(c, "config.rollback", c.Param("id"), note)
 	c.JSON(http.StatusOK, gin.H{"ok": true, "note": note})
 }
