@@ -1,0 +1,32 @@
+# HAProxy WebUI 后端 systemd 服务(裸机部署)
+# 安装:
+#   1. go build -o /usr/local/bin/haproxy-webui ./cmd/server   (在本机 backend 目录执行)
+#   2. 创建系统用户与数据目录:
+#        useradd -r -s /usr/sbin/nologin haproxy-webui
+#        mkdir -p /var/lib/haproxy-webui && chown haproxy-webui /var/lib/haproxy-webui
+#   3. 写入环境配置 /etc/haproxy-webui/env(至少设置 HAPROXY_WEBUI_JWT_SECRET)
+#   4. cp 本文件 /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now haproxy-webui
+[Unit]
+Description=HAProxy WebUI backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=haproxy-webui
+Group=haproxy-webui
+EnvironmentFile=-/etc/haproxy-webui/env
+Environment=HAPROXY_WEBUI_DB=/var/lib/haproxy-webui/haproxy-webui.db
+ExecStart=/usr/local/bin/haproxy-webui
+Restart=on-failure
+RestartSec=5
+
+# 基础加固
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/haproxy-webui
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

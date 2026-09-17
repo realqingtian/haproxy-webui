@@ -1,0 +1,29 @@
+# 每台 HAProxy 节点上运行的 dataplaneapi systemd 服务
+# 安装脚本见同目录 install.sh,配置文件 /etc/default/dataplaneapi 可覆盖参数
+[Unit]
+Description=HAProxy Data Plane API
+Documentation=https://www.haproxy.com/documentation/dataplaneapi/
+After=network-online.target haproxy.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 以 root 运行:dataplaneapi 需要重写 /etc/haproxy/haproxy.cfg、执行 systemctl reload、
+# 访问 root 属主的 runtime socket;用普通用户需配 polkit/sudo 白名单,列入 M4 加固项。
+User=root
+Group=root
+ExecStart=/usr/local/bin/dataplaneapi \
+    --config-file /etc/haproxy/haproxy.cfg \
+    --userlist dataplaneapi \
+    --host 0.0.0.0 \
+    --port 5555 \
+    --haproxy-bin /usr/sbin/haproxy \
+    --reload-cmd "systemctl reload haproxy" \
+    --restart-cmd "systemctl restart haproxy"
+EnvironmentFile=-/etc/default/dataplaneapi
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

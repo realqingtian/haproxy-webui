@@ -1,0 +1,18 @@
+# 后端
+backend/data/
+backend/haproxy-webui
+backend/haproxy-webui.test
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+
+# 环境与本地文件
+.env
+*.local.env
+deploy/server.local.env
+*.log
+.DS_Store
+
+# 工具插件状态
+.video_agent/

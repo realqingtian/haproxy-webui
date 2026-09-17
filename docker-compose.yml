@@ -1,0 +1,24 @@
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      HAPROXY_WEBUI_JWT_SECRET: ${HAPROXY_WEBUI_JWT_SECRET:?请在 .env 中设置 JWT 密钥}
+      HAPROXY_WEBUI_ENCRYPTION_KEY: ${HAPROXY_WEBUI_ENCRYPTION_KEY:-}
+      HAPROXY_WEBUI_ADMIN_USER: ${HAPROXY_WEBUI_ADMIN_USER:-admin}
+      HAPROXY_WEBUI_ADMIN_PASSWORD: ${HAPROXY_WEBUI_ADMIN_PASSWORD:-admin123}
+    volumes:
+      - backend-data:/data
+    expose:
+      - "8080"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${HAPROXY_WEBUI_HTTP_PORT:-8081}:80"
+
+volumes:
+  backend-data:

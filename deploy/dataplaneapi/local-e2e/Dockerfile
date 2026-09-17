@@ -1,0 +1,26 @@
+# 本地端到端联调环境:单容器同时跑 HAProxy + dataplaneapi,模拟一台受管节点。
+# 构建参数与 WebUI 后端部署形态无关,Mac(Apple Silicon)默认 arm64,x86 机器用 --build-arg DPAPI_ARCH=x86_64
+#
+# 构建: docker build -t haproxy-dpapi-e2e .
+# 运行: docker run -d --name dpapi-e2e -p 5555:5555 -p 8404:8404 haproxy-dpapi-e2e
+# 验证: curl -u dataplaneapi:demosecret localhost:5555/v2/info
+# WebUI 注册实例地址(docker desktop 下后端容器访问宿主端口):
+#   http://host.docker.internal:5555  用户 dataplaneapi  密码 demosecret
+# HAProxy stats 页: http://localhost:8404/stats
+FROM alpine:3
+
+RUN apk add --no-cache haproxy curl
+
+ARG DPAPI_VERSION=3.4.3
+ARG DPAPI_ARCH=arm64
+ADD https://github.com/haproxytech/dataplaneapi/releases/download/v${DPAPI_VERSION}/dataplaneapi_${DPAPI_VERSION}_linux_${DPAPI_ARCH}.tar.gz /tmp/dpapi.tar.gz
+RUN tar -xzf /tmp/dpapi.tar.gz -C /tmp \
+    && install -m 0755 /tmp/dataplaneapi /usr/local/bin/dataplaneapi \
+    && rm -rf /tmp/dpapi.tar.gz /tmp/dataplaneapi /tmp/LICENSE /tmp/CHANGELOG.md
+
+COPY haproxy.cfg /etc/haproxy/haproxy.cfg
+COPY start.sh /start.sh
+
+EXPOSE 5555 8404
+
+CMD ["/bin/sh", "/start.sh"]

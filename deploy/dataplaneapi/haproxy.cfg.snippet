@@ -1,0 +1,14 @@
+# /etc/haproxy/haproxy.cfg 中需要包含的与 dataplaneapi 配套的最小片段(实机部署时合并进现有配置)
+#
+# 1) dataplaneapi 的 Basic Auth 用户(把 CHANGE_ME 换成强密码,WebUI 添加实例时填同一组)
+userlist dataplaneapi
+    user dataplaneapi insecure-password CHANGE_ME
+
+# 2) 运行时 API socket(dataplaneapi 运行时操作依赖)
+global
+    stats socket /var/run/haproxy.sock mode 660 level admin
+
+# 3) 建议同时开启 metrics/stats 页面(可选)
+# defaults
+#     stats enable
+#     stats uri /haproxy-stats
