@@ -90,6 +90,11 @@ func (c *Client) RawConfig(ctx context.Context) (string, error) {
 	return c.readText(ctx, "/v3/services/haproxy/configuration/raw")
 }
 
+// RawConfigTx 返回事务内的 haproxy.cfg 原文(含未提交的暂存操作),供提交前 diff 预览。
+func (c *Client) RawConfigTx(ctx context.Context, txID string) (string, error) {
+	return c.readText(ctx, "/v3/services/haproxy/configuration/raw?transaction_id="+txID)
+}
+
 // ---- 运行时 ----
 
 // RuntimeServer 是运行时服务器状态;Weight 为字符串(空串表示未知/未设置)。

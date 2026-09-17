@@ -61,9 +61,9 @@ func (c *Client) CommitTransaction(ctx context.Context, id string) (string, erro
 		return "", fmt.Errorf("connect dataplaneapi: %w", err)
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		return "", fmt.Errorf("commit transaction returned %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return "", fmt.Errorf("commit transaction returned %d: %s", resp.StatusCode, string(body))
 	}
 	return resp.Header.Get("Reload-Id"), nil
 }

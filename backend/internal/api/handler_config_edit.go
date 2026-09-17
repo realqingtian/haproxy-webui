@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
@@ -122,7 +123,7 @@ func (h *NodeHandler) ApplyOps(c *gin.Context) {
 		return
 	}
 
-	note := strings.Join(summaries, ";")
+	note := truncateNote(strings.Join(summaries, ";"))
 	h.recordRevision(c, client, note)
 	claims := auth.ClaimsFromContext(c)
 	h.db.Create(&model.AuditLog{
@@ -130,6 +131,57 @@ func (h *NodeHandler) ApplyOps(c *gin.Context) {
 		Target: c.Param("id"), Detail: note, IP: c.ClientIP(),
 	})
 	c.JSON(http.StatusOK, gin.H{"ok": true, "reloadId": reloadID, "note": note})
+}
+
+// PreviewOps POST /api/instances/:id/config/preview
+// 预览暂存操作的应用效果:开事务 → 执行操作 → 读取事务内 raw → 放弃事务。
+// 不触发 reload、不落盘、不产生快照;返回应用前后的 raw 全文供前端做 diff。
+func (h *NodeHandler) PreviewOps(c *gin.Context) {
+	client, ok := h.clientFromContext(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Ops []configOp `json:"ops" binding:"required,min=1"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	ctx := c.Request.Context()
+
+	current, err := client.RawConfig(ctx)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	version, err := client.Version(ctx)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	tx, err := client.StartTransaction(ctx, version)
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "开启事务失败(配置可能已被其他会话修改),请刷新重试: " + err.Error()})
+		return
+	}
+	for _, op := range req.Ops {
+		if err := applyOne(ctx, client, tx.ID, op); err != nil {
+			_ = client.AbortTransaction(ctx, tx.ID)
+			c.JSON(http.StatusBadGateway, gin.H{
+				"error":   fmt.Sprintf("操作「%s」校验失败,预览中止: %v", op.summary(), err),
+				"aborted": true,
+			})
+			return
+		}
+	}
+	preview, err := client.RawConfigTx(ctx, tx.ID)
+	_ = client.AbortTransaction(ctx, tx.ID) // 只预览:放弃事务,绝不提交
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"current": current, "preview": preview})
 }
 
 func applyOne(ctx context.Context, client *dataplane.Client, txID string, op configOp) error {
@@ -180,6 +232,20 @@ func checkOrDefault(v string) string {
 		return "disabled"
 	}
 	return v
+}
+
+// truncateNote 限制批量提交的 note 长度:AuditLog.Detail 列宽 512 字节,
+// 超长时在 rune 边界截断追加省略号,避免静默截断产生乱码尾部。
+func truncateNote(s string) string {
+	const limit = 500 // 留出余量,覆盖 "..." 与审计写入的其他字段
+	if len(s) <= limit {
+		return s
+	}
+	s = s[:limit]
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s + "..."
 }
 
 // ---- 版本快照 ----

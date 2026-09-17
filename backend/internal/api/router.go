@@ -87,6 +87,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 					write.PUT("/:id/backends/:backend/servers/:server/weight", nodeHandler.SetServerWeight)
 					// M3 配置管理:事务化编辑、版本快照
 					write.POST("/:id/config/apply", nodeHandler.ApplyOps)
+					write.POST("/:id/config/preview", nodeHandler.PreviewOps)
 					write.POST("/:id/config/sync", nodeHandler.SyncRevision)
 					write.POST("/:id/config/revisions/:revId/rollback", nodeHandler.RollbackRevision)
 				}
