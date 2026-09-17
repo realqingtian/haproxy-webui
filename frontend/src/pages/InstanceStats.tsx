@@ -1,7 +1,7 @@
+import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2, RefreshCw } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -10,6 +10,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Pagination } from '@/components/ui/pagination'
+import { SummaryCard } from '@/components/stats/SummaryCard'
+import { StatusBadge } from '@/components/stats/StatusBadge'
 import {
   Table,
   TableBody,
@@ -21,9 +24,9 @@ import {
 import { api, ApiError } from '@/lib/api'
 import { fmtBytes, fmtNum } from '@/lib/format'
 import type { Instance, StatItem } from '@/types'
-
 export default function InstanceStatsPage() {
   const { id } = useParams<{ id: string }>()
+  const [serverPage, setServerPage] = useState(1)
 
   const instances = useQuery({
     queryKey: ['instances'],
@@ -53,6 +56,15 @@ export default function InstanceStatsPage() {
   const totalSessions = frontends.reduce((acc, s) => acc + num(s, 'stot'), 0)
   const totalBin = frontends.reduce((acc, s) => acc + num(s, 'bin'), 0)
   const totalBout = frontends.reduce((acc, s) => acc + num(s, 'bout'), 0)
+
+  // server 表可能很大,客户端分页(每页 20);轮询数据变化时收敛到有效页
+  const SERVER_PAGE_SIZE = 20
+  const serverPageCount = Math.max(1, Math.ceil(servers.length / SERVER_PAGE_SIZE))
+  const currentServerPage = Math.min(serverPage, serverPageCount)
+  const pagedServers = servers.slice(
+    (currentServerPage - 1) * SERVER_PAGE_SIZE,
+    currentServerPage * SERVER_PAGE_SIZE,
+  )
 
   return (
     <div className="space-y-6">
@@ -188,7 +200,7 @@ export default function InstanceStatsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {servers.map((s) => (
+                  {pagedServers.map((s) => (
                     <TableRow key={`${s.backend_name}/${s.name}`}>
                       <TableCell className="font-medium">
                         {s.backend_name} / {s.name}
@@ -206,30 +218,15 @@ export default function InstanceStatsPage() {
                   ))}
                 </TableBody>
               </Table>
+              <Pagination
+                page={currentServerPage}
+                pageCount={serverPageCount}
+                onChange={setServerPage}
+              />
             </CardContent>
           </Card>
         </>
       )}
     </div>
   )
-}
-
-function SummaryCard({ title, value }: { title: string; value: string }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardDescription>{title}</CardDescription>
-        <CardTitle className="text-xl">{value}</CardTitle>
-      </CardHeader>
-    </Card>
-  )
-}
-
-function StatusBadge({ status }: { status: string }) {
-  if (status.startsWith('UP')) return <Badge className="bg-green-600">{status}</Badge>
-  if (status.startsWith('DOWN')) return <Badge variant="destructive">{status}</Badge>
-  if (status.includes('MAINT')) return <Badge variant="secondary">{status}</Badge>
-  if (status.includes('DRAIN')) return <Badge className="bg-yellow-600">{status}</Badge>
-  if (!status) return <Badge variant="outline">—</Badge>
-  return <Badge variant="outline">{status}</Badge>
 }

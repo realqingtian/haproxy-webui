@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Pagination } from '@/components/ui/pagination'
 import { api, ApiError } from '@/lib/api'
 import type { AuditLog } from '@/types'
 
@@ -42,6 +43,7 @@ const ACTION_LABELS: Record<string, string> = {
 export default function AuditLogsPage() {
   const [action, setAction] = useState('')
   const [username, setUsername] = useState('')
+  const [page, setPage] = useState(1)
 
   const logs = useQuery({
     queryKey: ['audit-logs', action, username],
@@ -56,6 +58,12 @@ export default function AuditLogsPage() {
   })
 
   const list = logs.data ?? []
+
+  // 客户端分页(每页 50);过滤条件变化导致列表缩短时收敛到有效页
+  const PAGE_SIZE = 50
+  const pageCount = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const paged = list.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   return (
     <div className="space-y-6">
@@ -119,8 +127,8 @@ export default function AuditLogsPage() {
                   <TableHead>来源 IP</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {list.map((l) => (
+                <TableBody>
+                  {paged.map((l) => (
                   <TableRow key={l.id}>
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                       {new Date(l.createdAt).toLocaleString('zh-CN')}
@@ -139,6 +147,7 @@ export default function AuditLogsPage() {
               </TableBody>
             </Table>
           )}
+          <Pagination page={currentPage} pageCount={pageCount} onChange={setPage} />
         </CardContent>
       </Card>
     </div>

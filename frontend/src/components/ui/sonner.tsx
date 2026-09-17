@@ -1,13 +1,15 @@
 "use client"
 
 import { Toaster as Sonner, type ToasterProps } from "sonner"
+import { useTheme } from "next-themes"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
-// Vite 项目无 next-themes,主题固定跟随系统
+// 主题跟随 next-themes(浅色 / 深色 / 跟随系统三态,与顶栏切换器联动)
 const Toaster = ({ ...props }: ToasterProps) => {
+  const { theme = "system" } = useTheme()
   return (
     <Sonner
-      theme="system"
+      theme={theme as ToasterProps["theme"]}
       className="toaster group"
       icons={{
         success: (
