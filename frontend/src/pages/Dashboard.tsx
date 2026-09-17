@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { api, getCachedUser } from '@/lib/api'
-import type { InstanceHealth } from '@/types'
+import type { Cluster, InstanceHealth } from '@/types'
 
 interface HealthResponse {
   status: string
@@ -33,10 +33,26 @@ export default function DashboardPage() {
     queryFn: () => api<InstanceHealth[]>('/api/health/instances'),
     refetchInterval: 30_000,
   })
+  const clusters = useQuery({
+    queryKey: ['clusters'],
+    queryFn: () => api<Cluster[]>('/api/clusters'),
+  })
 
   const backendUp = health.data?.status === 'ok'
   const instanceList = instances.data ?? []
   const upCount = instanceList.filter((i) => i.ok).length
+
+  // 按集群分组展示(keepalived 主备归组);未归组的实例排在最后
+  const clusterList = clusters.data ?? []
+  const clusterName = (id: number | null | undefined) =>
+    clusterList.find((c) => c.id === id)?.name ?? '未分组'
+  const instanceGroups = new Map<string, InstanceHealth[]>()
+  for (const i of [...instanceList].sort(
+    (a, b) => (a.clusterId ?? 0) - (b.clusterId ?? 0),
+  )) {
+    const group = clusterName(i.clusterId)
+    instanceGroups.set(group, [...(instanceGroups.get(group) ?? []), i])
+  }
 
   return (
     <div className="space-y-6">
@@ -89,20 +105,29 @@ export default function DashboardPage() {
               {instances.isLoading ? '—' : `${upCount}/${instanceList.length} 在线`}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-1.5">
+          <CardContent className="space-y-3">
             {instances.isLoading ? (
               <span className="text-xs text-muted-foreground">探测中…</span>
             ) : instanceList.length === 0 ? (
               <span className="text-xs text-muted-foreground">尚未添加实例</span>
             ) : (
-              instanceList.map((i) => (
-                <div key={i.id} className="flex items-center justify-between text-xs">
-                  <span className="font-medium">{i.name}</span>
-                  {i.ok ? (
-                    <Badge className="bg-green-600">在线</Badge>
-                  ) : (
-                    <Badge variant="destructive">不可达</Badge>
+              [...instanceGroups.entries()].map(([group, items]) => (
+                <div key={group} className="space-y-1.5">
+                  {group !== '未分组' && (
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {group}
+                    </div>
                   )}
+                  {items.map((i) => (
+                    <div key={i.id} className="flex items-center justify-between text-xs">
+                      <span className="font-medium">{i.name}</span>
+                      {i.ok ? (
+                        <Badge className="bg-green-600">在线</Badge>
+                      ) : (
+                        <Badge variant="destructive">不可达</Badge>
+                      )}
+                    </div>
+                  ))}
                 </div>
               ))
             )}

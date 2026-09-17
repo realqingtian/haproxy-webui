@@ -21,7 +21,7 @@ type User struct {
 }
 
 // Instance 是一台受管 HAProxy 节点上的 dataplaneapi 端点。
-// TODO(M4 安全加固): Password 目前明文入库,后续改为 AES-GCM 加密存储。
+// Password 为 AES-GCM 密文(前缀 enc:),由 internal/cryptoutil 处理。
 type Instance struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	Name      string    `gorm:"uniqueIndex;size:64;not null" json:"name"`
@@ -29,6 +29,17 @@ type Instance struct {
 	Username  string    `gorm:"size:64;not null" json:"username"`
 	Password  string    `json:"-"`
 	Enabled   bool      `gorm:"not null;default:true" json:"enabled"`
+	ClusterID *uint     `gorm:"index" json:"clusterId"` // 归属集群(M5-3),可空
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// Cluster 是实例的逻辑分组(如一组 keepalived 主备),VIP 与主备状态探测为后续扩展点。
+type Cluster struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Name      string    `gorm:"uniqueIndex;size:64;not null" json:"name"`
+	Vip       string    `gorm:"size:64" json:"vip"` // 虚拟 IP(keepalived 场景)
+	Note      string    `gorm:"size:255" json:"note"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }

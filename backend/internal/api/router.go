@@ -29,6 +29,7 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	nodeHandler := NewNodeHandler(db)
 	userHandler := NewUserHandler(db)
 	oidcHandler := NewOidcHandler(cfg, db)
+	clusterHandler := NewClusterHandler(db)
 
 	apiGroup := r.Group("/api")
 	{
@@ -37,11 +38,23 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		apiGroup.GET("/auth/oidc/start", oidcHandler.Start)
 		apiGroup.GET("/auth/oidc/callback", oidcHandler.Callback)
 
-		protected := apiGroup.Group("", auth.Middleware(cfg.JWTSecret))
-		{
-			protected.GET("/auth/me", authHandler.Me)
-			protected.PUT("/auth/password", userHandler.ChangePassword)
-			protected.GET("/health/instances", instanceHandler.Health)
+			protected := apiGroup.Group("", auth.Middleware(cfg.JWTSecret))
+			{
+				protected.GET("/auth/me", authHandler.Me)
+				protected.PUT("/auth/password", userHandler.ChangePassword)
+				protected.GET("/health/instances", instanceHandler.Health)
+
+				clusters := protected.Group("/clusters")
+				{
+					clusters.GET("", clusterHandler.List)
+					clusters.GET("/:id/health", clusterHandler.ClusterHealth)
+					writeClusters := clusters.Group("", auth.RequireRole(model.RoleAdmin, model.RoleOperator))
+					{
+						writeClusters.POST("", clusterHandler.Create)
+						writeClusters.PUT("/:id", clusterHandler.Update)
+						writeClusters.DELETE("/:id", clusterHandler.Delete)
+					}
+				}
 
 			admin := protected.Group("", auth.RequireRole(model.RoleAdmin))
 			{

@@ -20,7 +20,7 @@ func Open(path string) (*gorm.DB, error) {
 }
 
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&model.User{}, &model.Instance{}, &model.AuditLog{}, &model.ConfigRevision{})
+	return db.AutoMigrate(&model.User{}, &model.Instance{}, &model.AuditLog{}, &model.ConfigRevision{}, &model.Cluster{})
 }
 
 // SeedAdmin 仅在用户表为空时创建首个管理员,已有用户则不动。

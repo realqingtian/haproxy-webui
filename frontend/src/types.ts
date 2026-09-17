@@ -18,8 +18,16 @@ export interface Instance {
   baseUrl: string
   username: string
   enabled: boolean
+  clusterId: number | null
   createdAt: string
   updatedAt: string
+}
+
+export interface Cluster {
+  id: number
+  name: string
+  vip: string
+  note: string
 }
 
 export interface InstanceTestResult {
@@ -35,6 +43,7 @@ export interface InstanceHealth {
   ok: boolean
   version: string
   error?: string
+  clusterId?: number | null
 }
 
 export interface AuditLog {

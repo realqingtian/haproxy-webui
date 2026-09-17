@@ -21,11 +21,12 @@ func NewInstanceHandler(db *gorm.DB) *InstanceHandler {
 }
 
 type instanceRequest struct {
-	Name     string `json:"name" binding:"required,max=64"`
-	BaseURL  string `json:"baseUrl" binding:"required,url"`
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password"`
-	Enabled  *bool  `json:"enabled"`
+	Name      string `json:"name" binding:"required,max=64"`
+	BaseURL   string `json:"baseUrl" binding:"required,url"`
+	Username  string `json:"username" binding:"required"`
+	Password  string `json:"password"`
+	Enabled   *bool  `json:"enabled"`
+	ClusterID *uint  `json:"clusterId"` // 归属集群,可空(null/缺省 = 未分组)
 }
 
 func (h *InstanceHandler) List(c *gin.Context) {
@@ -43,7 +44,7 @@ func (h *InstanceHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	inst := model.Instance{Name: req.Name, BaseURL: req.BaseURL, Username: req.Username, Enabled: true}
+	inst := model.Instance{Name: req.Name, BaseURL: req.BaseURL, Username: req.Username, Enabled: true, ClusterID: req.ClusterID}
 	if req.Enabled != nil {
 		inst.Enabled = *req.Enabled
 	}
@@ -68,6 +69,7 @@ func (h *InstanceHandler) Update(c *gin.Context) {
 		return
 	}
 	inst.Name, inst.BaseURL, inst.Username = req.Name, req.BaseURL, req.Username
+	inst.ClusterID = req.ClusterID // 可置空 = 移出集群
 	if req.Password != "" { // 留空表示不修改密码
 		inst.Password = cryptoutil.EncryptStored(req.Password)
 	} else {
@@ -128,11 +130,12 @@ func (h *InstanceHandler) Health(c *gin.Context) {
 	}
 
 	type healthItem struct {
-		ID      uint   `json:"id"`
-		Name    string `json:"name"`
-		Ok      bool   `json:"ok"`
-		Version string `json:"version"`
-		Error   string `json:"error,omitempty"`
+		ID        uint   `json:"id"`
+		Name      string `json:"name"`
+		Ok        bool   `json:"ok"`
+		Version   string `json:"version"`
+		Error     string `json:"error,omitempty"`
+		ClusterID *uint  `json:"clusterId"`
 	}
 	results := make([]healthItem, len(instances))
 	var wg sync.WaitGroup
@@ -140,7 +143,7 @@ func (h *InstanceHandler) Health(c *gin.Context) {
 		wg.Add(1)
 		go func(i int, inst model.Instance) {
 			defer wg.Done()
-			item := healthItem{ID: inst.ID, Name: inst.Name}
+			item := healthItem{ID: inst.ID, Name: inst.Name, ClusterID: inst.ClusterID}
 			client := dataplane.NewClient(inst.BaseURL, inst.Username, cryptoutil.DecryptStoredOrDefault(inst.Password))
 			if info, err := client.Info(c.Request.Context()); err == nil {
 				item.Ok = true
