@@ -24,7 +24,7 @@ test('核心链路冒烟', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'HAProxy 实例' })).toBeVisible()
   await page.getByRole('button', { name: '添加实例' }).click()
   await page.getByLabel('名称').fill('e2e-node')
-  await page.getByLabel('地址').fill('http://localhost:5555')
+  await page.getByLabel('地址', { exact: true }).fill('http://localhost:5555')
   await page.getByLabel('用户名').fill('dataplaneapi')
   await page.getByLabel('密码').fill('demosecret')
   await page.getByRole('button', { name: '保存' }).click()
@@ -91,4 +91,41 @@ test('核心链路冒烟', async ({ page }) => {
   await page.getByRole('dialog').getByRole('button', { name: '删除' }).click()
   await expect(page.getByText('实例已删除')).toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: 'e2e-node' })).toHaveCount(0)
+})
+
+// v0.6:告警渠道 CRUD + 巡检设置保存(admin 专属页)
+test('告警与巡检冒烟', async ({ page }) => {
+  const CHANNEL = `e2e_hook_${UNIQUE}`
+
+  await page.goto('/login')
+  await page.getByLabel('用户名').fill('admin')
+  await page.getByLabel('密码').fill('admin123')
+  await page.getByRole('button', { name: '登录' }).click()
+  await expect(page).toHaveURL('/')
+
+  // ---- 渠道新增 ----
+  await page.getByRole('button', { name: '告警与巡检' }).click()
+  await expect(page.getByRole('heading', { name: '告警与巡检' })).toBeVisible()
+  await page.getByRole('button', { name: '添加渠道' }).click()
+  await page.getByLabel('名称').fill(CHANNEL)
+  await page.getByLabel('Webhook 地址').fill('http://localhost:1/hook') // 不可达地址,仅测 CRUD
+  await page.getByRole('dialog').getByRole('button', { name: '保存' }).click()
+  await expect(page.getByText('渠道已创建')).toBeVisible()
+
+  // ---- 测试发送(指向不可达地址,应报发送失败而非无响应)----
+  const chRow = page.getByRole('row').filter({ hasText: CHANNEL })
+  await chRow.getByRole('button', { name: `测试 ${CHANNEL}` }).click()
+  await expect(page.getByText(/发送失败|测试消息已发送/).first()).toBeVisible({ timeout: 15_000 })
+
+  // ---- 巡检设置保存(快照巡检设为 0 = 关闭,不影响其他用例)----
+  await page.getByLabel('快照巡检周期(分钟,0 = 关闭)').fill('0')
+  await page.getByLabel('健康探测周期(秒,≥10)').fill('30')
+  await page.getByRole('button', { name: '保存设置' }).click()
+  await expect(page.getByText(/巡检设置已保存/)).toBeVisible()
+
+  // ---- 渠道删除 ----
+  await chRow.getByRole('button', { name: `删除 ${CHANNEL}` }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '删除' }).click()
+  await expect(page.getByText('渠道已删除')).toBeVisible()
+  await expect(page.getByRole('row').filter({ hasText: CHANNEL })).toHaveCount(0)
 })
