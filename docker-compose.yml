@@ -4,7 +4,9 @@ services:
     restart: unless-stopped
     environment:
       HAPROXY_WEBUI_JWT_SECRET: ${HAPROXY_WEBUI_JWT_SECRET:?请在 .env 中设置 JWT 密钥}
-      HAPROXY_WEBUI_ENCRYPTION_KEY: ${HAPROXY_WEBUI_ENCRYPTION_KEY:-}
+      # 独立凭据加密密钥(与 JWT secret 不同):v0.6 起必填,缺失会拒绝启动;
+      # 首次配置后启动会自动把旧派生密钥加密的凭据迁移为独立密钥
+      HAPROXY_WEBUI_ENCRYPTION_KEY: ${HAPROXY_WEBUI_ENCRYPTION_KEY:?请在 .env 中设置与 JWT 密钥不同的独立加密密钥}
       HAPROXY_WEBUI_ADMIN_USER: ${HAPROXY_WEBUI_ADMIN_USER:-admin}
       HAPROXY_WEBUI_ADMIN_PASSWORD: ${HAPROXY_WEBUI_ADMIN_PASSWORD:-admin123}
     volumes:

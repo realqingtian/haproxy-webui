@@ -1,9 +1,14 @@
 # local-e2e:单容器 HAProxy + dataplaneapi(v3),作为 BFF 集成测试与 Playwright E2E 的真实受管节点。
 # 凭据:dataplaneapi / demosecret(与 haproxy.cfg 的 userlist 一致),端口 5555(API)/ 8404(stats)。
+# haproxy 版本对齐真实节点 2.8(ALPINE_VERSION=3.19);要 haproxy 3.x 用 ALPINE_VERSION=3 覆盖。
 # 用法:docker compose up -d --wait(--wait 依赖下方 healthcheck,就绪后返回)
 services:
   dpapi-e2e:
-    build: .
+    build:
+      context: .
+      args:
+        ALPINE_VERSION: ${ALPINE_VERSION:-3.19}
+        DPAPI_ARCH: ${DPAPI_ARCH:-arm64}
     container_name: dpapi-e2e
     ports:
       - "5555:5555"

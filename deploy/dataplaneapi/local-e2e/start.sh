@@ -8,6 +8,7 @@
 # 3. 必须等 haproxy 的 runtime socket(/var/run/haproxy.sock)就绪后再启动 dataplaneapi:
 #    只等 pidfile 不够,socket 未就绪时 dataplaneapi 会静默退出(exit 1 无日志);
 # 4. 重试循环记录退出码到 /var/log/dpapi.log,便于排查。
+echo "container haproxy version: $(haproxy -v | head -1)" # 便于确认与真实节点的版本对齐情况
 haproxy -W -db -p /var/run/haproxy.pid -f /etc/haproxy/haproxy.cfg &
 
 i=0
