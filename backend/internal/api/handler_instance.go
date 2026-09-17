@@ -2,11 +2,11 @@ package api
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"haproxy-webui/backend/internal/auth"
 	"haproxy-webui/backend/internal/cryptoutil"
 	"haproxy-webui/backend/internal/dataplane"
 	"haproxy-webui/backend/internal/model"
@@ -119,15 +119,39 @@ func (h *InstanceHandler) Test(c *gin.Context) {
 	})
 }
 
-// audit 用当前登录用户写审计日志,handler 内便捷封装。
-func audit(c *gin.Context, action, target, detail string) {
-	db := c.MustGet("db").(*gorm.DB)
-	claims := auth.ClaimsFromContext(c)
-	if claims == nil {
+// Health GET /api/health/instances — 并发探测全部启用实例的 dataplaneapi 可达性。
+func (h *InstanceHandler) Health(c *gin.Context) {
+	var instances []model.Instance
+	if err := h.db.Where("enabled = ?", true).Find(&instances).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	db.Create(&model.AuditLog{
-		UserID: claims.UserID, Username: claims.Username, Action: action,
-		Target: target, Detail: detail, IP: c.ClientIP(),
-	})
+
+	type healthItem struct {
+		ID      uint   `json:"id"`
+		Name    string `json:"name"`
+		Ok      bool   `json:"ok"`
+		Version string `json:"version"`
+		Error   string `json:"error,omitempty"`
+	}
+	results := make([]healthItem, len(instances))
+	var wg sync.WaitGroup
+	for i, inst := range instances {
+		wg.Add(1)
+		go func(i int, inst model.Instance) {
+			defer wg.Done()
+			item := healthItem{ID: inst.ID, Name: inst.Name}
+			client := dataplane.NewClient(inst.BaseURL, inst.Username, cryptoutil.DecryptStoredOrDefault(inst.Password))
+			if info, err := client.Info(c.Request.Context()); err == nil {
+				item.Ok = true
+				item.Version = info.API.Version
+			} else {
+				item.Error = err.Error()
+			}
+			results[i] = item
+		}(i, inst)
+	}
+	wg.Wait()
+
+	c.JSON(http.StatusOK, results)
 }

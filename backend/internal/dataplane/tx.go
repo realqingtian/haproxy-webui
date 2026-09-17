@@ -1,13 +1,12 @@
 package dataplane
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // Transaction 对应 dataplaneapi 事务。
@@ -83,11 +82,11 @@ func (c *Client) ReloadStatus(ctx context.Context, id string) (*Reload, error) {
 	return &r, nil
 }
 
-// PushRawConfig 整体替换配置(带版本校验),用于回滚。
+// PushRawConfig 整体替换配置(带版本校验),用于回滚。reload 异步进行,返回 201/202。
 func (c *Client) PushRawConfig(ctx context.Context, version int64, raw string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.baseURL+"/v3/services/haproxy/configuration/raw?version="+strconv.FormatInt(version, 10),
-		bytes.NewReader([]byte(raw)))
+		strings.NewReader(raw))
 	if err != nil {
 		return err
 	}
@@ -100,7 +99,6 @@ func (c *Client) PushRawConfig(ctx context.Context, version int64, raw string) e
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body)
-	// 202 = 已接受,reload 异步进行
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
 		return fmt.Errorf("push config returned %d", resp.StatusCode)
 	}
@@ -119,7 +117,7 @@ func (c *Client) CreateBackend(ctx context.Context, txID, name string) error {
 // DeleteBackend 在事务内删除 backend。
 func (c *Client) DeleteBackend(ctx context.Context, txID, name string) error {
 	return c.deleteJSON(ctx,
-		"/v3/services/haproxy/configuration/backends/" + name + "?transaction_id=" + txID)
+		"/v3/services/haproxy/configuration/backends/"+name+"?transaction_id="+txID)
 }
 
 // ServerPayload 是事务内创建/更新服务器的字段。
@@ -211,59 +209,4 @@ func (c *Client) ListACLs(ctx context.Context, parentType, parent string) ([]ACL
 		return nil, err
 	}
 	return list, nil
-}
-
-// ---- 通用请求助手 ----
-
-func (c *Client) postJSON(ctx context.Context, path string, body any, out any) error {
-	var payload []byte
-	if body != nil {
-		var err error
-		if payload, err = json.Marshal(body); err != nil {
-			return err
-		}
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(payload))
-	if err != nil {
-		return err
-	}
-	req.SetBasicAuth(c.username, c.password)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return fmt.Errorf("connect dataplaneapi: %w", err)
-	}
-	defer resp.Body.Close()
-	// 202 = 配置变更在事务内被接受(提交时生效);201 = 资源已创建
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("%s returned %d: %s", path, resp.StatusCode, string(body))
-	}
-	if out == nil {
-		return nil
-	}
-	return json.NewDecoder(resp.Body).Decode(out)
-}
-
-func (c *Client) deleteJSON(ctx context.Context, path string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+path, nil)
-	if err != nil {
-		return err
-	}
-	req.SetBasicAuth(c.username, c.password)
-
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return fmt.Errorf("connect dataplaneapi: %w", err)
-	}
-	defer resp.Body.Close()
-	// 事务内的删除返回 202(提交时生效),立即删除返回 204
-	if resp.StatusCode != http.StatusNoContent &&
-		resp.StatusCode != http.StatusAccepted &&
-		resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("%s returned %d: %s", path, resp.StatusCode, string(body))
-	}
-	return nil
 }
