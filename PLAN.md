@@ -62,11 +62,16 @@
 - [x] 实例凭据加密存储:AES-256-GCM,密钥 HAPROXY_WEBUI_ENCRYPTION_KEY(缺省从 JWT secret 派生,有警告);兼容历史明文,实例编辑时自动迁移;DB 落库验证 enc: 密文
 - [x] 配置模板:HTTP / TCP 负载均衡一键生成(frontend+bind+backend+服务器组,单事务提交);实测 mode tcp 经 frontend POST 可写入
 - [x] Prometheus 指标接入:部署指引 deploy/prometheus.md(节点 prometheus-exporter 配置、抓取配置、常用指标与告警规则建议)
-- [ ] keepalived 主备集群视角展示(需节点实际部署 keepalived 环境,暂缓)
+- [x] keepalived 降级方案(第一阶段,M5-3 完成):Cluster 模型 + CRUD(/api/clusters)、
+      实例归组(clusterId)+ VIP 字段 + 组内健康一览(/api/clusters/:id/health,
+      vrrp 字段预留 unknown);前端集群管理卡片 / 实例表单归组 / 仪表盘按集群分组。
+      完整 VRRP 主备状态探测待第二台节点 + keepalived 环境后接入(接口已预留)
 - [x] OIDC / SSO 登录:标准 Authorization Code + PKCE,按 email find-or-create(与本地账号隔离,默认 viewer);
       后端 /api/auth/oidc/{status,start,callback},前端 SSO 按钮 + 回调页;
       本地 dex 容器(deploy/dev-idp)完整走通浏览器验证,上线仅需替换 IdP 环境变量
-- [ ] k8s 部署清单(当前部署形态 compose + systemd 已满足,待有 k8s 环境后补充)
+- [x] k8s 部署清单(2026-09-17 完成):deploy/k8s kustomize 清单(namespace/Secret/PVC/前后端
+      Deployment+Service,前端 NodePort 30080);本机 kind 集群真实验证通过(nginx→backend→
+      SQLite on PVC + WAL);kind-config.yaml 含 extraPortMappings
 
 ## M5 M4 收尾批次(2026-09-17 立项,四项全部开工)
 
