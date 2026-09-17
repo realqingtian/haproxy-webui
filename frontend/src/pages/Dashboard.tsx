@@ -8,8 +8,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { api } from '@/lib/api'
-import type { Instance } from '@/types'
+import { api, getCachedUser } from '@/lib/api'
+import type { InstanceHealth } from '@/types'
 
 interface HealthResponse {
   status: string
@@ -21,24 +21,22 @@ const ROLE_LABELS: Record<string, string> = {
   viewer: '只读',
 }
 
-function cacheUser(): { username?: string; role?: string } | null {
-  return JSON.parse(localStorage.getItem('haproxy-webui-user') ?? 'null')
-}
-
 export default function DashboardPage() {
-  const me = cacheUser()
+  const me = getCachedUser()
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => api<HealthResponse>('/api/health'),
     refetchInterval: 15_000,
   })
   const instances = useQuery({
-    queryKey: ['instances'],
-    queryFn: () => api<Instance[]>('/api/instances'),
+    queryKey: ['instances-health'],
+    queryFn: () => api<InstanceHealth[]>('/api/health/instances'),
+    refetchInterval: 30_000,
   })
 
   const backendUp = health.data?.status === 'ok'
   const instanceList = instances.data ?? []
+  const upCount = instanceList.filter((i) => i.ok).length
 
   return (
     <div className="space-y-6">
@@ -85,14 +83,29 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>HAProxy 实例</CardDescription>
+            <CardDescription>HAProxy 实例健康</CardDescription>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Server className="size-5 text-primary" />
-              {instances.isLoading ? '—' : instanceList.length}
+              {instances.isLoading ? '—' : `${upCount}/${instanceList.length} 在线`}
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">
-            实例管理将在 M2 提供
+          <CardContent className="space-y-1.5">
+            {instances.isLoading ? (
+              <span className="text-xs text-muted-foreground">探测中…</span>
+            ) : instanceList.length === 0 ? (
+              <span className="text-xs text-muted-foreground">尚未添加实例</span>
+            ) : (
+              instanceList.map((i) => (
+                <div key={i.id} className="flex items-center justify-between text-xs">
+                  <span className="font-medium">{i.name}</span>
+                  {i.ok ? (
+                    <Badge className="bg-green-600">在线</Badge>
+                  ) : (
+                    <Badge variant="destructive">不可达</Badge>
+                  )}
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
@@ -101,12 +114,11 @@ export default function DashboardPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Info className="size-4 text-blue-500" />
-            开发进度说明
+            提示
           </CardTitle>
           <CardDescription>
-            当前为 M1 骨架版本:登录、RBAC 骨架、实例 CRUD 接口与审计日志已就绪。
-            前端实例管理页、运行时控制在 M2 实现,可视化配置编辑在 M3,完整路线见根目录
-            PLAN.md。
+            实例的配置管理从「实例管理 → 配置」或侧边栏「配置管理」进入;
+            后续迭代规划见 docs/ROADMAP.md,完成记录见 PLAN.md。
           </CardDescription>
         </CardHeader>
       </Card>

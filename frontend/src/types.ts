@@ -29,6 +29,14 @@ export interface InstanceTestResult {
   error?: string
 }
 
+export interface InstanceHealth {
+  id: number
+  name: string
+  ok: boolean
+  version: string
+  error?: string
+}
+
 export interface AuditLog {
   id: number
   userId: number
