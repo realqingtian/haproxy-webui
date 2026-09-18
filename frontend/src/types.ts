@@ -25,6 +25,8 @@ export interface Instance {
   sshPort: number
   sshUser: string
   sshUnit: string
+  // 已记录的 host key 指纹(v0.9):空 = 下次连接信任首次(TOFU);非空 = 钉扎校验
+  sshHostKey: string
   createdAt: string
   updatedAt: string
 }

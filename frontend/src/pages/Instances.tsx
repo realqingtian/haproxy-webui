@@ -50,6 +50,7 @@ interface InstanceForm {
   sshPassword: string
   sshPrivateKey: string
   sshUnit: string
+  sshHostKey: string
 }
 
 const EMPTY_FORM: InstanceForm = {
@@ -66,6 +67,7 @@ const EMPTY_FORM: InstanceForm = {
   sshPassword: '',
   sshPrivateKey: '',
   sshUnit: '',
+  sshHostKey: '',
 }
 
 export default function InstancesPage() {
@@ -116,6 +118,7 @@ export default function InstancesPage() {
         sshPassword: v.form.sshPassword,
         sshPrivateKey: v.form.sshPrivateKey,
         sshUnit: v.form.sshUnit,
+        sshHostKey: v.form.sshHostKey,
       })
       return v.id
         ? api<Instance>(`/api/instances/${v.id}`, { method: 'PUT', body })
@@ -185,6 +188,7 @@ export default function InstancesPage() {
       sshPassword: '',
       sshPrivateKey: '',
       sshUnit: inst.sshUnit ?? '',
+      sshHostKey: inst.sshHostKey ?? '',
     })
     setDialogOpen(true)
   }
@@ -467,6 +471,31 @@ export default function InstancesPage() {
                       placeholder="dataplaneapi"
                     />
                   </div>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="inst-ssh-key-fp">Host key 指纹</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="inst-ssh-key-fp"
+                      value={form.sshHostKey}
+                      readOnly
+                      placeholder="首次连接自动记录(TOFU),之后钉扎校验"
+                      className="font-mono text-xs"
+                    />
+                    {form.sshHostKey && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        onClick={() => setForm({ ...form, sshHostKey: '' })}
+                      >
+                        重置
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    节点重装或更换主机 key 后需重置重录;保存时原样回传即保持不变
+                  </p>
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="inst-ssh-pass">SSH 密码</Label>

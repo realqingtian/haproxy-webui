@@ -12,6 +12,7 @@ import (
 	"haproxy-webui/backend/internal/cryptoutil"
 	"haproxy-webui/backend/internal/dataplane"
 	"haproxy-webui/backend/internal/model"
+	"haproxy-webui/backend/internal/systemd"
 )
 
 // ClusterHandler 集群分组(M5-3 降级方案第一阶段):
@@ -193,7 +194,7 @@ func (h *ClusterHandler) VRRP(c *gin.Context) {
 				return
 			}
 			node.Probeable = true
-			cfg, err := systemdConfig(&inst)
+			cfg, err := systemd.ConfigFromInstance(&inst)
 			if err != nil {
 				node.Error = err.Error()
 				nodes[i] = node
@@ -204,12 +205,13 @@ func (h *ClusterHandler) VRRP(c *gin.Context) {
 			st, err := cfg.KeepalivedStatus(ctx, cluster.Vip)
 			if err != nil {
 				node.Error = err.Error()
-				if hint := sshErrorHint(err); hint != "" {
+				if hint := systemd.Hint(err); hint != "" {
 					node.Hint = hint
 				}
 				nodes[i] = node
 				return
 			}
+			persistHostKey(h.db, &inst, &cfg)
 			node.KeepalivedRunning = st.KeepalivedRunning
 			node.VipPresent = st.VipPresent
 			node.Role = st.Role

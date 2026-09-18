@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"haproxy-webui/backend/internal/systemd/systemdtest"
 )
 
 // vrrpExec 模拟节点 keepalived 探测响应:进程是否存活 + 是否持有 VIP。
@@ -47,8 +49,8 @@ func TestClusterVRRPFlow(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &cluster)
 
 	// 两个 fake SSH 节点:lb1 = MASTER(持 VIP),lb2 = BACKUP
-	ssh1 := newFakeSSH(t, "sshu", "sshp", vrrpExec(true, true))
-	ssh2 := newFakeSSH(t, "sshu", "sshp", vrrpExec(true, false))
+	ssh1, _ := systemdtest.NewServer(t, "sshu", "sshp", vrrpExec(true, true))
+	ssh2, _ := systemdtest.NewServer(t, "sshu", "sshp", vrrpExec(true, false))
 	host1, port1, _ := net.SplitHostPort(ssh1)
 	host2, port2, _ := net.SplitHostPort(ssh2)
 
@@ -98,7 +100,7 @@ func TestClusterVRRPFlow(t *testing.T) {
 	}
 
 	// keepalived 挂掉 → fault
-	ssh3 := newFakeSSH(t, "sshu", "sshp", vrrpExec(false, true))
+	ssh3, _ := systemdtest.NewServer(t, "sshu", "sshp", vrrpExec(false, true))
 	host3, port3, _ := net.SplitHostPort(ssh3)
 	id4 := registerInstanceNamed(t, r, admin, fake.url, itDPUser, itDPPass, "lb4-fault")
 	w = doJSON(t, r, http.MethodPut, fmt.Sprintf("/api/instances/%d", id4), admin, map[string]any{

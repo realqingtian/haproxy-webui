@@ -1,11 +1,6 @@
 package api
 
 import (
-	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"encoding/binary"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,86 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/crypto/ssh"
+	"haproxy-webui/backend/internal/systemd/systemdtest"
 )
-
-// ---- 进程内 SSH 服务器:模拟节点 sshd,exec 请求交由回调应答 ----
-
-// newFakeSSH 起一个只支持 exec 的 SSH 服务器,返回监听地址。
-func newFakeSSH(t *testing.T, user, pass string, exec func(cmd string) (string, int)) string {
-	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("gen host key: %v", err)
-	}
-	signer, err := ssh.NewSignerFromKey(key)
-	if err != nil {
-		t.Fatalf("signer: %v", err)
-	}
-	config := &ssh.ServerConfig{
-		PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-			if conn.User() == user && string(password) == pass {
-				return nil, nil
-			}
-			return nil, fmt.Errorf("auth failed for %s", conn.User())
-		},
-	}
-	config.AddHostKey(signer)
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	t.Cleanup(func() { _ = ln.Close() })
-
-	go func() {
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			sconn, chans, reqs, err := ssh.NewServerConn(conn, config)
-			if err != nil {
-				continue
-			}
-			_ = sconn
-			go ssh.DiscardRequests(reqs)
-			go handleSSHChannels(chans, exec)
-		}
-	}()
-	return ln.Addr().String()
-}
-
-func handleSSHChannels(chans <-chan ssh.NewChannel, exec func(string) (string, int)) {
-	for nch := range chans {
-		if nch.ChannelType() != "session" {
-			_ = nch.Reject(ssh.UnknownChannelType, "unsupported")
-			continue
-		}
-		ch, reqs, err := nch.Accept()
-		if err != nil {
-			continue
-		}
-		go func(ch ssh.Channel, reqs <-chan *ssh.Request) {
-			defer ch.Close()
-			for req := range reqs {
-				if req.Type != "exec" {
-					_ = req.Reply(false, nil)
-					continue
-				}
-				var n uint32
-				_ = binary.Read(bytes.NewReader(req.Payload), binary.BigEndian, &n)
-				cmd := string(req.Payload[4 : 4+n])
-				out, code := exec(cmd)
-				_, _ = ch.Write([]byte(out))
-				status := make([]byte, 4)
-				binary.BigEndian.PutUint32(status, uint32(code))
-				_, _ = ch.SendRequest("exit-status", false, status)
-				_ = req.Reply(true, nil)
-				return
-			}
-		}(ch, reqs)
-	}
-}
 
 // fakeSSHExec 模拟节点 systemd:状态查询与重启(含 sudo 免密 / 免密未配置两种形态)。
 func fakeSSHExec(cmd string) (string, int) {
@@ -123,7 +40,7 @@ func TestServiceManagementFlow(t *testing.T) {
 	admin := loginToken(t, r, "admin", "admin123")
 	id := registerInstance(t, r, admin, fake.url, itDPPass)
 
-	sshAddr := newFakeSSH(t, "sshu", "sshp", fakeSSHExec)
+	sshAddr, _ := systemdtest.NewServer(t, "sshu", "sshp", fakeSSHExec)
 	host, port, _ := net.SplitHostPort(sshAddr)
 
 	// 配置 SSH(unit 非默认值路径与默认路径都覆盖:这里用默认 dataplaneapi)
@@ -201,5 +118,46 @@ func TestServiceNotConfigured(t *testing.T) {
 	}
 	if w := doJSON(t, r, http.MethodPost, fmt.Sprintf("/api/instances/%d/service/restart", id), admin, nil); w.Code != http.StatusBadRequest {
 		t.Fatalf("restart without ssh should 400: %d", w.Code)
+	}
+}
+
+// v0.9 host key 指纹:TOFU 首连自动记录;钉扎后不匹配拒绝连接并给重录提示。
+func TestSSHHostKeyPinning(t *testing.T) {
+	r, fake := newTestEnv(t)
+	admin := loginToken(t, r, "admin", "admin123")
+	id := registerInstance(t, r, admin, fake.url, itDPPass)
+
+	sshAddr, hostFP := systemdtest.NewServer(t, "sshu", "sshp", fakeSSHExec)
+	host, port, _ := net.SplitHostPort(sshAddr)
+	applySSH := func(fp string) {
+		t.Helper()
+		w := doJSON(t, r, http.MethodPut, fmt.Sprintf("/api/instances/%d", id), admin, map[string]any{
+			"name": "it-node", "baseUrl": fake.url, "username": itDPUser,
+			"sshHost": host, "sshPort": mustPort(t, port), "sshUser": "sshu", "sshPassword": "sshp",
+			"sshHostKey": fp,
+		})
+		if w.Code != http.StatusOK {
+			t.Fatalf("update instance: %d %s", w.Code, w.Body.String())
+		}
+	}
+
+	// TOFU:未记录指纹时首连成功,实际指纹自动回写实例
+	applySSH("")
+	if w := doJSON(t, r, http.MethodGet, fmt.Sprintf("/api/instances/%d/service", id), admin, nil); w.Code != http.StatusOK {
+		t.Fatalf("tofu status: %d %s", w.Code, w.Body.String())
+	}
+	if w := doJSON(t, r, http.MethodGet, "/api/instances", admin, nil); !strings.Contains(w.Body.String(), hostFP) {
+		t.Fatalf("captured fingerprint not persisted: %s (want %s)", w.Body.String(), hostFP)
+	}
+
+	// 钉扎:记录正确指纹 → 正常;错误指纹 → 拒绝连接并给重录提示
+	applySSH(hostFP)
+	if w := doJSON(t, r, http.MethodGet, fmt.Sprintf("/api/instances/%d/service", id), admin, nil); w.Code != http.StatusOK {
+		t.Fatalf("pinned status: %d", w.Code)
+	}
+	applySSH("SHA256:Zm9vYmFy")
+	w := doJSON(t, r, http.MethodGet, fmt.Sprintf("/api/instances/%d/service", id), admin, nil)
+	if w.Code != http.StatusBadGateway || !strings.Contains(w.Body.String(), "host key") {
+		t.Fatalf("mismatch should 502 with hint: %d %s", w.Code, w.Body.String())
 	}
 }

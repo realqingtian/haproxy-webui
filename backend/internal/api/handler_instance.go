@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/gin-gonic/gin"
@@ -35,6 +36,7 @@ type instanceRequest struct {
 	SSHPassword   string `json:"sshPassword"`
 	SSHPrivateKey string `json:"sshPrivateKey"`
 	SSHUnit       string `json:"sshUnit"`
+	SSHHostKey    string `json:"sshHostKey"` // 已记录 host key 指纹;清空提交 = 重置为 TOFU
 }
 
 func (h *InstanceHandler) List(c *gin.Context) {
@@ -80,6 +82,7 @@ func applySSHRequest(inst *model.Instance, req *instanceRequest) error {
 	inst.SSHPort = req.SSHPort
 	inst.SSHUser = req.SSHUser
 	inst.SSHUnit = req.SSHUnit
+	inst.SSHHostKey = strings.TrimSpace(req.SSHHostKey)
 	if req.SSHPassword != "" {
 		enc, err := cryptoutil.EncryptStored(req.SSHPassword)
 		if err != nil {

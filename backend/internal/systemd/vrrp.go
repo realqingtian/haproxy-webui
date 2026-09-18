@@ -20,7 +20,7 @@ type VRRPStatus struct {
 //   - 进程存活用 pgrep 而非 systemctl:不依赖 systemd(容器 / alpine 节点同样可用);
 //   - VIP 只在 Go 侧与 `ip -o -4 addr show` 输出比对,不进入命令串;
 //   - VIP 为空(集群未填)时仍可探测进程与角色,但无法区分主备(恒为 backup 或 fault)。
-func (c Config) KeepalivedStatus(ctx context.Context, vip string) (*VRRPStatus, error) {
+func (c *Config) KeepalivedStatus(ctx context.Context, vip string) (*VRRPStatus, error) {
 	procOut, err := c.run(ctx, "pgrep -x keepalived >/dev/null && echo up || echo down")
 	if err != nil {
 		return nil, fmt.Errorf("check keepalived process: %w", err)

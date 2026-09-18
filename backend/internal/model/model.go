@@ -47,6 +47,9 @@ type Instance struct {
 	// SSHHost 空则取 BaseURL host;SSHPort 不加 default 标签(避免 gorm 吞零值),0 视为 22;
 	// SSHPassword / SSHPrivateKey 为 AES-GCM 密文(与 Password 同机制);SSHUnit 空 → dataplaneapi
 	SSHHost       string    `gorm:"size:255" json:"sshHost"`
+	// SSHHostKey 是已记录的节点 SSH host key 指纹(SHA256:<base64>,非密钥):
+	// 空 = 尚未记录,下次连接信任首次(TOFU)并回写;非空 = 钉扎校验,不匹配拒绝连接(v0.9)
+	SSHHostKey    string    `gorm:"size:128" json:"sshHostKey"`
 	// SSHPort 不用纯 not null:SQLite 存量表加 NOT NULL 无默认列会迁移失败,须带 default:0
 	// (0 视为 22;default 标签对 int 零值无 v0.6 bool 吞 false 的坑)
 	SSHPort       int       `gorm:"not null;default:0" json:"sshPort"`
