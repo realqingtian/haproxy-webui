@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -13,8 +15,7 @@ import (
 )
 
 // ClusterHandler 集群分组(M5-3 降级方案第一阶段):
-// 实例的逻辑归组与组内健康一览;真实 VRRP 主备状态探测留接口(当前返回 vrrp=unknown),
-// 待有第二台节点搭起 keepalived 主备后接入。
+// 实例的逻辑归组与组内健康一览;v0.8 起接入真实 VRRP 探测(见 VRRP handler)。
 type ClusterHandler struct {
 	db *gorm.DB
 }
@@ -143,5 +144,84 @@ func (h *ClusterHandler) ClusterHealth(c *gin.Context) {
 		Cluster:   cluster,
 		Vrrp:      "unknown",
 		Instances: items,
+	})
+}
+
+// ---- v0.8 VRRP 真实状态探测 ----
+
+type vrrpNode struct {
+	InstanceID        uint   `json:"instanceId"`
+	Name              string `json:"name"`
+	Probeable         bool   `json:"probeable"` // 是否配置了实例级 SSH
+	KeepalivedRunning bool   `json:"keepalivedRunning"`
+	VipPresent        bool   `json:"vipPresent"`
+	Role              string `json:"role"` // master / backup / fault / unknown
+	Error             string `json:"error,omitempty"`
+	Hint              string `json:"hint,omitempty"`
+}
+
+type clusterVRRP struct {
+	ID    uint       `json:"id"`
+	Name  string     `json:"name"`
+	Vip   string     `json:"vip"`
+	Nodes []vrrpNode `json:"nodes"`
+}
+
+// VRRP GET /api/clusters/:id/vrrp — 组内实例的 keepalived 状态与 VIP 归属(并发探测)。
+// 未配置 SSH 或探测失败的实例单独标注,不影响其他节点;登录即可读。
+func (h *ClusterHandler) VRRP(c *gin.Context) {
+	var cluster model.Cluster
+	if err := h.db.First(&cluster, c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "cluster not found"})
+		return
+	}
+	var instances []model.Instance
+	if err := h.db.Where("cluster_id = ? AND enabled = ?", cluster.ID, true).Find(&instances).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	nodes := make([]vrrpNode, len(instances))
+	var wg sync.WaitGroup
+	for i, inst := range instances {
+		wg.Add(1)
+		go func(i int, inst model.Instance) {
+			defer wg.Done()
+			node := vrrpNode{InstanceID: inst.ID, Name: inst.Name, Role: "unknown"}
+			if !inst.SSHConfigured() {
+				nodes[i] = node
+				return
+			}
+			node.Probeable = true
+			cfg, err := systemdConfig(&inst)
+			if err != nil {
+				node.Error = err.Error()
+				nodes[i] = node
+				return
+			}
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+			defer cancel()
+			st, err := cfg.KeepalivedStatus(ctx, cluster.Vip)
+			if err != nil {
+				node.Error = err.Error()
+				if hint := sshErrorHint(err); hint != "" {
+					node.Hint = hint
+				}
+				nodes[i] = node
+				return
+			}
+			node.KeepalivedRunning = st.KeepalivedRunning
+			node.VipPresent = st.VipPresent
+			node.Role = st.Role
+			nodes[i] = node
+		}(i, inst)
+	}
+	wg.Wait()
+
+	c.JSON(http.StatusOK, clusterVRRP{
+		ID:    cluster.ID,
+		Name:  cluster.Name,
+		Vip:   cluster.Vip,
+		Nodes: nodes,
 	})
 }

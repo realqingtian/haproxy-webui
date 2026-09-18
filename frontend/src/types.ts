@@ -55,6 +55,26 @@ export interface Cluster {
   note: string
 }
 
+// ---- v0.8 keepalived 集群视角 ----
+
+// GET /api/clusters/:id/vrrp 的节点项;probeable=false 表示实例未配置 SSH
+export interface VrrpNode {
+  instanceId: number
+  name: string
+  probeable: boolean
+  keepalivedRunning: boolean
+  vipPresent: boolean
+  role: 'master' | 'backup' | 'fault' | 'unknown'
+  error?: string
+  hint?: string
+}
+
+export interface ClusterVRRP {
+  id: number
+  name: string
+  vip: string
+  nodes: VrrpNode[]
+}
 
 export type AlertChannelType = 'feishu' | 'dingtalk' | 'wecom'
 

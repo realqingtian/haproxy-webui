@@ -1,0 +1,80 @@
+# v0.8 本地 keepalived 双节点验证环境(仅开发/验证用)。
+# 双容器经自定义桥接网络跑 unicast VRRP(容器网络无组播),MASTER 持 VIP 172.28.255.100。
+#
+# 用法:docker compose -f deploy/dev-keepalived/docker-compose.yml up -d --build --wait
+# 端口规划(与 local-e2e 的 5555/8404 错开):
+#   lb1: dataplaneapi 5557 -> 5555,stats 8405 -> 8404,ssh 2222 -> 22
+#   lb2: dataplaneapi 5558 -> 5555,stats 8406 -> 8404,ssh 2223 -> 22
+# WebUI 验证步骤(README「keepalived 验证环境」一节有完整流程):
+#   1. 建集群(如 kvrrp-demo,VIP 172.28.255.100)
+#   2. 注册 lb1/lb2 实例(地址 http://localhost:5557 / 5558,凭据 dataplaneapi/demosecret),
+#      SSH 配置:地址 127.0.0.1,端口 2222 / 2223,用户 root,密码 devroot
+#   3. 监控总览页集群卡片查看 VRRP 状态;failover:docker exec kvrrp-lb1 pkill keepalived
+services:
+  lb1:
+    build:
+      context: .
+      args:
+        ALPINE_VERSION: ${ALPINE_VERSION:-3.19}
+        DPAPI_ARCH: ${DPAPI_ARCH:-arm64}
+    container_name: kvrrp-lb1
+    init: true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      KV_SELF_IP: 172.28.255.11
+      KV_PEER_IP: 172.28.255.12
+      KV_PRIORITY: "150"
+      KV_STATE: MASTER
+      KV_VIP: 172.28.255.100/24
+    ports:
+      - "5557:5555"
+      - "8405:8404"
+      - "2222:22"
+    networks:
+      kvrrp:
+        ipv4_address: 172.28.255.11
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-u", "dataplaneapi:demosecret", "http://localhost:5555/v3/info"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  lb2:
+    build:
+      context: .
+      args:
+        ALPINE_VERSION: ${ALPINE_VERSION:-3.19}
+        DPAPI_ARCH: ${DPAPI_ARCH:-arm64}
+    container_name: kvrrp-lb2
+    init: true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      KV_SELF_IP: 172.28.255.12
+      KV_PEER_IP: 172.28.255.11
+      KV_PRIORITY: "100"
+      KV_STATE: BACKUP
+      KV_VIP: 172.28.255.100/24
+    ports:
+      - "5558:5555"
+      - "8406:8404"
+      - "2223:22"
+    networks:
+      kvrrp:
+        ipv4_address: 172.28.255.12
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-u", "dataplaneapi:demosecret", "http://localhost:5555/v3/info"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+networks:
+  kvrrp:
+    ipam:
+      config:
+        - subnet: 172.28.255.0/24

@@ -53,6 +53,8 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				{
 					clusters.GET("", clusterHandler.List)
 					clusters.GET("/:id/health", clusterHandler.ClusterHealth)
+					// v0.8:集群 VRRP 真实状态探测(keepalived + VIP 归属)
+					clusters.GET("/:id/vrrp", clusterHandler.VRRP)
 					writeClusters := clusters.Group("", auth.RequireRole(model.RoleAdmin, model.RoleOperator))
 					{
 						writeClusters.POST("", clusterHandler.Create)

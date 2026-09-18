@@ -19,9 +19,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SummaryCard } from '@/components/stats/SummaryCard'
+import { VrrpStrip } from '@/components/stats/VrrpStrip'
 import { api, ApiError } from '@/lib/api'
 import { fmtNum } from '@/lib/format'
-import type { Cluster, Instance, InstanceHealth, StatItem } from '@/types'
+import type { Cluster, ClusterVRRP, Instance, InstanceHealth, StatItem } from '@/types'
 import { cn } from '@/lib/utils'
 
 // 监控总览:全部实例的健康与流量聚合,按集群分组展示,点击实例行下钻单实例监控页。
@@ -42,6 +43,17 @@ export default function MonitoringPage() {
     queryKey: ['clusters'],
     queryFn: () => api<Cluster[]>('/api/clusters'),
   })
+  // v0.8:集群 VRRP 真实状态(keepalived + VIP 归属),按集群并发拉取
+  const vrrpQueries = useQueries({
+    queries: (clusters.data ?? []).map((cl) => ({
+      queryKey: ['cluster-vrrp', cl.id],
+      queryFn: () => api<ClusterVRRP>(`/api/clusters/${cl.id}/vrrp`),
+      refetchInterval: 15_000,
+    })),
+  })
+  const vrrpByCluster = new Map(
+    (clusters.data ?? []).map((cl, i) => [cl.id, { data: vrrpQueries[i]?.data, loading: vrrpQueries[i]?.isPending ?? false, refetch: vrrpQueries[i]?.refetch }]),
+  )
 
   const enabled = (instances.data ?? []).filter((i) => i.enabled)
   const statsQueries = useQueries({
@@ -104,11 +116,10 @@ export default function MonitoringPage() {
   )
   const online = rows.filter((r) => r.h?.ok).length
 
-  // 按集群分组(未分组排最后,与仪表盘一致)
-  const groups = new Map<string, Row[]>()
+  // 按集群分组(key = clusterId,null = 未分组排最后,与仪表盘一致)
+  const groups = new Map<number | null, Row[]>()
   for (const r of [...rows].sort((a, b) => (a.inst.clusterId ?? 1e9) - (b.inst.clusterId ?? 1e9))) {
-    const g = clusterName(r.inst.clusterId)
-    groups.set(g, [...(groups.get(g) ?? []), r])
+    groups.set(r.inst.clusterId, [...(groups.get(r.inst.clusterId) ?? []), r])
   }
 
   return (
@@ -125,7 +136,9 @@ export default function MonitoringPage() {
           size="sm"
           onClick={() => {
             health.refetch()
+            clusters.refetch()
             statsQueries.forEach((q) => q.refetch())
+            vrrpQueries.forEach((q) => q.refetch())
           }}
         >
           <RefreshCw className="mr-1 size-4" />
@@ -143,16 +156,25 @@ export default function MonitoringPage() {
         <SummaryCard title="当前连接(全实例)" value={fmtNum(allAgg.scur)} />
       </div>
 
-      {[...groups.entries()].map(([group, items]) => (
-        <Card key={group}>
+      {[...groups.entries()].map(([clusterId, items]) => {
+        const vrrp = clusterId != null ? vrrpByCluster.get(clusterId) : undefined
+        return (
+        <Card key={clusterId ?? 'ungrouped'}>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Activity className="size-4 text-primary" />
-              {group}
+              {clusterName(clusterId)}
             </CardTitle>
             <CardDescription>{items.length} 个实例</CardDescription>
           </CardHeader>
           <CardContent>
+            {clusterId != null && vrrp && (
+              <VrrpStrip
+                data={vrrp.data}
+                loading={vrrp.loading}
+                onRefresh={() => vrrp.refetch?.()}
+              />
+            )}
             <Table>
               <TableHeader>
                 <TableRow>
@@ -215,7 +237,8 @@ export default function MonitoringPage() {
             </Table>
           </CardContent>
         </Card>
-      ))}
+        )
+      })}
 
       {instances.isError && (
         <Card>
