@@ -19,8 +19,9 @@
   OIDC / SSO、k8s 部署清单。
 - **质量门禁**:`make test`(单测 + 进程内集成,无 Docker 依赖)、`make test-integration`
   (真实 dataplaneapi 容器)、`make e2e`(Playwright 冒烟)三层全绿;markdownlint 零告警。
-- **下一批工作来源**:「五、后续规划」需求池与「七、已知风险」中的改进项,均未排期,
-  开工前需与用户确认范围。
+- **已排期待开发**(2026-09-18 用户确认):v0.10 Runtime maps 在线编辑 →
+  v0.11 实时化(stats SSE 推送 + 日志尾部)→ v0.12 移动端适配与多语言,
+  详见「四、各期明细」对应小节;需求池其余项未排期。
 
 ## 二、里程碑总览
 
@@ -265,16 +266,9 @@ NoNewPrivileges=true 存量问题,v0.7 真机验收时定位并修复(见 v0.7 �
 
 ## 五、后续规划(需求池,未排期)
 
-> 有价值但未与用户确认排期的需求。开工前需确认范围,升格为里程碑小节。
-
-- Runtime maps 在线编辑
-- stats WebSocket 实时推送(替代 10s 轮询)
-- 移动端 / 窄屏适配
-- 多语言(i18n)
-- 节点 haproxy 日志尾部查看(需先设计节点侧日志接口方案)
-
-> v0.7/v0.8 验收遗留的三项改进(证书删除 reload 监视告警、host key 指纹校验、主备切换告警)
-> 已于 v0.9 完成,移出本池。
+> 有价值但未排期的需求,开工前需确认范围。当前为空:
+> 原五项(Runtime maps、实时推送、移动端适配、i18n、日志尾部)经用户 2026-09-18 确认
+> 已排期为 v0.10–v0.12;v0.7/v0.8 验收遗留三项改进已于 v0.9 完成。
 
 ## 六、已知技术债(已全部偿清)
 
@@ -310,6 +304,55 @@ NoNewPrivileges=true 存量问题,v0.7 真机验收时定位并修复(见 v0.7 �
 - [x] 收尾:make test / test-integration / e2e 全绿;PLAN / README 同步
       (2026-09-18 完成:make test 八包全绿、test-integration 两用例通过、e2e 3 passed、
        vet + 前端构建 + markdownlint 零告警)
+
+## v0.10 Runtime maps 在线编辑(2026-09-18 排期)
+
+> 来源:需求池。目标:在线管理 HAProxy maps(灰度名单 / 域名分流等),条目增删改即时生效并可持久化。
+
+- [x] 探测与基建(2026-09-18 完成):实测 3.4.3——storage maps 默认可用(免 flag,
+       /etc/haproxy/maps);runtime maps 全套 CRUD 需配置引用才注册;
+       **条目 PUT/DELETE 需按 key 定位(GET 返回的指针 id 节点不认),force_sync=true
+       即时同步节点文件**;local-e2e 镜像内置被 demo 前端引用的 hosts.map
+- [x] 后端(2026-09-18 完成):dataplane/maps.go 客户端(runtime 列表 / 条目 / 增删改 +
+       storage 列表 / 内容 / 上传,transport 抽出 postMultipart 与证书上传共用);
+       handler_maps.go 合并视图(runtime 生效 + storage 未引用,active 标记)、
+       key/value 白名单校验(无空白引号 ≤256)、未生效 map 转 400 + 可操作 hint;
+       读登录可读、写 operator+,审计 map.entry.add/set/delete + map.upload;
+       fake dataplane 补 maps 全套端点;进程内 + 容器级集成测试
+       (增删改后经 storage 内容接口断言 force_sync 落盘)
+- [x] 前端(2026-09-18 完成):配置页「Maps」页签——map 列表(生效状态徽标)、
+       条目表 + 添加行、行内编辑值 / 删除(确认即时生效语义)、文件内容查看、
+       上传对话框;未生效 map 仅可查看内容并展示指引
+- [x] 收尾(2026-09-18 完成):make test 八包全绿、test-integration 三用例通过
+       (新增 TestContainerMapsFlow)、e2e 3 passed(Maps 条目增删步骤)、
+       vet + 前端构建 + markdownlint 零告警;README 功能表增「Runtime Maps」行,
+       service 单元 ExecStartPre 补 /etc/haproxy/maps 目录
+
+## v0.11 实时化:stats 推送与日志尾部(2026-09-18 排期)
+
+> 来源:需求池。目标:stats 替代 10s 轮询;提供节点 haproxy 日志实时尾部查看。
+> 技术决策:用 SSE(Server-Sent Events)而非 WebSocket——本场景全部为服务端单向推送,
+> SSE 零新依赖且 Bearer 鉴权头天然可用(EventSource 不支持自定义头,前端用 fetch 流式
+> 读取 + 自动重连);日志尾部复用 v0.7 的 SSH 通道执行 tail -f 流式转发。
+
+- [ ] SSE 基建:BFF `GET /api/instances/:id/stats/stream`(服务端周期拉 dataplaneapi
+      后推送 JSON 事件;连接生命周期管理与超时)
+- [ ] stats 页接入 SSE:实时数据改订阅推送,连接失败自动回落现有轮询
+- [ ] 日志尾部:实例可选配置 haproxy 日志路径(默认 /var/log/haproxy.log),BFF 经 SSH
+      `tail -n 200 -f` 经 SSE 流式转发;前端实例配置页「日志」页签(暂停 / 清屏 / 关键字过滤,
+      缓冲上限防内存膨胀);local-e2e 容器补 syslogd 使 haproxy 日志落文件以支撑测试
+- [ ] 收尾:测试 + e2e 用例 + README / PLAN 同步
+
+## v0.12 体验覆盖:移动端适配与多语言(2026-09-18 排期)
+
+> 来源:需求池。目标:窄屏可用 + 界面多语言。i18n 选 react-i18next(zh 默认,en 抽取),
+> 前端新增依赖会在实施时说明。
+
+- [ ] 移动端 / 窄屏适配:侧边栏窄屏抽屉化、表格窄屏策略(横向滚动 / 关键列优先)、
+      对话框窄屏全宽;375px 视口浏览器走查全部页面
+- [ ] 多语言 i18n:react-i18next 接入,全部页面文案抽取为 zh / en 资源文件,
+      顶栏语言切换并持久化偏好
+- [ ] 收尾:测试 + e2e 适配 + README / PLAN 同步
 
 ## 七、已知风险与注意事项(仍然有效)
 
