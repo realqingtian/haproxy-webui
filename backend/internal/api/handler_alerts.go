@@ -115,10 +115,11 @@ func (h *AlertHandler) Test(c *gin.Context) {
 		Kind: notify.KindTest, Instance: "-",
 		Detail: "这是一条测试消息,收到即表示渠道配置正确",
 	}.Text())
-	audit(c, "alert.channel.test", ch.Name, map[bool]string{true: "ok", false: err.Error()}[err == nil])
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"ok": false, "error": "发送失败: " + err.Error()})
+	if err == nil {
+		audit(c, "alert.channel.test", ch.Name, "ok")
+		c.JSON(http.StatusOK, gin.H{"ok": true})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	audit(c, "alert.channel.test", ch.Name, "send failed: "+err.Error())
+	c.JSON(http.StatusBadGateway, gin.H{"ok": false, "error": "发送失败: " + err.Error()})
 }
