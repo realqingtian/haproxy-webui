@@ -28,6 +28,10 @@ type Scheduler struct {
 
 	// 监控边沿状态,由 tick 单协程访问,无需加锁
 	mon map[uint]*monitorState
+
+	// v0.9 VRRP 巡检:各集群上次探测时间与上次已知角色
+	lastVRRPAt map[uint]time.Time
+	vrrp       map[uint]*vrrpClusterState
 }
 
 func New(db *gorm.DB) *Scheduler {
@@ -35,6 +39,8 @@ func New(db *gorm.DB) *Scheduler {
 		db:             db,
 		lastSnapshotAt: map[uint]time.Time{},
 		lastMonitorAt:  map[uint]time.Time{},
+		lastVRRPAt:     map[uint]time.Time{},
+		vrrp:           map[uint]*vrrpClusterState{},
 	}
 }
 
@@ -89,4 +95,9 @@ func (s *Scheduler) tick(ctx context.Context) {
 		}
 	}
 	runMonitorChecks(ctx, s, cfg, instances, now)
+
+	// v0.9 主备切换告警:与连通性监控同一周期,仅探测配置了 SSH 且已入组的实例
+	if cfg.MonitorIntervalSeconds >= 10 {
+		s.runVRRPChecks(ctx, s.db, time.Duration(cfg.MonitorIntervalSeconds)*time.Second, instances, now)
+	}
 }

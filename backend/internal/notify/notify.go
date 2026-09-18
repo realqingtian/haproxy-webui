@@ -23,6 +23,7 @@ const (
 	KindNodeRecovered = "node_recovered"
 	KindBackendDown   = "backend_down"
 	KindBackendUp     = "backend_up"
+	KindVRRPChange    = "vrrp_change"
 	KindTest          = "test"
 )
 
@@ -32,6 +33,7 @@ var kindLabels = map[string]string{
 	KindNodeRecovered: "节点恢复",
 	KindBackendDown:   "backend 全部 DOWN",
 	KindBackendUp:     "backend 恢复",
+	KindVRRPChange:    "主备切换",
 	KindTest:          "测试消息",
 }
 
