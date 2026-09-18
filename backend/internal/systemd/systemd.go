@@ -163,11 +163,11 @@ func (c *Config) Restart(ctx context.Context) (string, error) {
 	return c.run(ctx, fmt.Sprintf("sudo -n systemctl restart '%s'", c.Unit))
 }
 
-// run 建立 SSH 连接执行单条命令,非零退出码返回含 stderr 的错误。
-func (c *Config) run(ctx context.Context, cmd string) (string, error) {
+// dial 建立 SSH 连接:host key 指纹按 ExpectedFingerprint 校验(空 = TOFU 捕获)。
+func (c *Config) dial(ctx context.Context) (*ssh.Client, error) {
 	auth, err := c.authMethod()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	timeout := 10 * time.Second
 	if deadline, ok := ctx.Deadline(); ok {
@@ -175,7 +175,7 @@ func (c *Config) run(ctx context.Context, cmd string) (string, error) {
 			timeout = d
 		}
 	}
-	client, err := ssh.Dial("tcp", net.JoinHostPort(c.Host, strconv.Itoa(c.Port)), &ssh.ClientConfig{
+	return ssh.Dial("tcp", net.JoinHostPort(c.Host, strconv.Itoa(c.Port)), &ssh.ClientConfig{
 		User: c.User,
 		Auth: []ssh.AuthMethod{auth},
 		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
@@ -189,6 +189,11 @@ func (c *Config) run(ctx context.Context, cmd string) (string, error) {
 		},
 		Timeout: timeout,
 	})
+}
+
+// run 建立 SSH 连接执行单条命令,非零退出码返回含 stderr 的错误。
+func (c *Config) run(ctx context.Context, cmd string) (string, error) {
+	client, err := c.dial(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -226,6 +231,51 @@ func (c *Config) run(ctx context.Context, cmd string) (string, error) {
 		return "", errors.New(msg)
 	}
 	return string(out), nil
+}
+
+// TailStream 经 SSH 执行 `tail -n 200 -f <logPath>`,每读到一行回调 onLine;
+// ctx 取消(如客户端断开)时关闭连接并返回 ctx.Err()。日志路径只允许绝对路径安全字符集,
+// 由调用方校验;此处单引号包裹作第二层防护。
+func (c *Config) TailStream(ctx context.Context, logPath string, onLine func(string)) error {
+	client, err := c.dial(ctx)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return fmt.Errorf("open ssh session: %w", err)
+	}
+	defer session.Close()
+
+	pipe, err := session.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("ssh stdout pipe: %w", err)
+	}
+	if err := session.Start(fmt.Sprintf("tail -n 200 -f '%s'", logPath)); err != nil {
+		return fmt.Errorf("start tail: %w", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			client.Close()
+		case <-done:
+		}
+	}()
+	defer close(done)
+
+	scanner := bufio.NewScanner(pipe)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		onLine(scanner.Text())
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return ctx.Err()
 }
 
 func (c *Config) authMethod() (ssh.AuthMethod, error) {

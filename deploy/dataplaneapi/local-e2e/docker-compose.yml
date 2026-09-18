@@ -13,6 +13,7 @@ services:
     ports:
       - "5555:5555"
       - "8404:8404"
+      - "2222:22" # v0.11:SSH 供日志尾部等服务管理链路的容器级测试
     healthcheck:
       test: ["CMD", "curl", "-sf", "-u", "dataplaneapi:demosecret", "http://localhost:5555/v3/info"]
       interval: 3s

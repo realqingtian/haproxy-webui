@@ -51,6 +51,7 @@ interface InstanceForm {
   sshPrivateKey: string
   sshUnit: string
   sshHostKey: string
+  logPath: string
 }
 
 const EMPTY_FORM: InstanceForm = {
@@ -68,6 +69,7 @@ const EMPTY_FORM: InstanceForm = {
   sshPrivateKey: '',
   sshUnit: '',
   sshHostKey: '',
+  logPath: '',
 }
 
 export default function InstancesPage() {
@@ -119,6 +121,7 @@ export default function InstancesPage() {
         sshPrivateKey: v.form.sshPrivateKey,
         sshUnit: v.form.sshUnit,
         sshHostKey: v.form.sshHostKey,
+        logPath: v.form.logPath,
       })
       return v.id
         ? api<Instance>(`/api/instances/${v.id}`, { method: 'PUT', body })
@@ -189,6 +192,7 @@ export default function InstancesPage() {
       sshPrivateKey: '',
       sshUnit: inst.sshUnit ?? '',
       sshHostKey: inst.sshHostKey ?? '',
+      logPath: inst.logPath ?? '',
     })
     setDialogOpen(true)
   }
@@ -516,6 +520,18 @@ export default function InstancesPage() {
                     placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..."
                     className="h-24 w-full rounded-md border border-input bg-transparent p-2 font-mono text-xs"
                   />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="inst-log-path">haproxy 日志路径(可选)</Label>
+                  <Input
+                    id="inst-log-path"
+                    value={form.logPath}
+                    onChange={(e) => setForm({ ...form, logPath: e.target.value })}
+                    placeholder="/var/log/haproxy.log"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    「日志」页签经 SSH tail -f 实时读取该文件
+                  </p>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   重启服务需要该用户对 systemctl restart 具备 sudo 免密权限(NOPASSWD 白名单)

@@ -168,6 +168,11 @@ func (f *fakeDataplane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(http.StatusOK, map[string]any{"id": path[strings.LastIndex(path, "/")+1:], "status": status})
 
+	case r.Method == http.MethodGet && path == "/v3/services/haproxy/stats/native":
+		writeJSON(http.StatusOK, map[string]any{"stats": []map[string]any{
+			{"name": "demo_app", "type": "backend", "stats": map[string]any{"status": "UP", "scur": 3}},
+		}})
+
 	// ---- storage/runtime maps(v0.10):形态对齐 3.4.3 实测(条目按 key 定位) ----
 	case r.Method == http.MethodGet && path == "/v3/services/haproxy/runtime/maps":
 		list := make([]map[string]any, 0, len(f.mapsRuntime))

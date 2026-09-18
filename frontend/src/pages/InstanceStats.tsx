@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { Loader2, RefreshCw } from 'lucide-react'
@@ -22,13 +22,82 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { api, ApiError } from '@/lib/api'
+import { api, ApiError, getToken } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { fmtBytes, fmtNum } from '@/lib/format'
 import type { Instance, MetricsProbeResult, StatItem } from '@/types'
+
+// stats 数据来源(v0.11):优先 SSE 实时推送,连续失败 3 次自动回落 10s 轮询
+type StreamMode = 'connecting' | 'live' | 'polling'
+
+function useStatsStream(id: string | undefined): {
+  live: StatItem[] | undefined
+  mode: StreamMode
+} {
+  const [live, setLive] = useState<StatItem[]>()
+  const [mode, setMode] = useState<StreamMode>('connecting')
+
+  useEffect(() => {
+    if (!id) return
+    let stopped = false
+    const ctrl = new AbortController()
+    let retries = 0
+
+    const connect = async (): Promise<void> => {
+      try {
+        const resp = await fetch(`/api/instances/${id}/stats/stream`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+          signal: ctrl.signal,
+        })
+        if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`)
+        setMode('live')
+        const reader = resp.body.getReader()
+        const decoder = new TextDecoder()
+        let buf = ''
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done || stopped) return
+          buf += decoder.decode(value, { stream: true })
+          let idx: number
+          while ((idx = buf.indexOf('\n\n')) !== -1) {
+            const chunk = buf.slice(0, idx)
+            buf = buf.slice(idx + 2)
+            for (const line of chunk.split('\n')) {
+              if (!line.startsWith('data: ')) continue
+              try {
+                const parsed = JSON.parse(line.slice(6))
+                if (Array.isArray(parsed)) setLive(parsed)
+              } catch {
+                /* 跳过坏帧 */
+              }
+            }
+          }
+        }
+      } catch {
+        if (stopped || ctrl.signal.aborted) return
+        retries += 1
+        if (retries >= 3) {
+          setMode('polling')
+          return
+        }
+        await new Promise((r) => setTimeout(r, 2000))
+        if (!stopped) return connect()
+      }
+    }
+    connect()
+    return () => {
+      stopped = true
+      ctrl.abort()
+    }
+  }, [id])
+
+  return { live, mode }
+}
+
 export default function InstanceStatsPage() {
   const { id } = useParams<{ id: string }>()
   const [serverPage, setServerPage] = useState(1)
+  const { live, mode } = useStatsStream(id)
 
   const instances = useQuery({
     queryKey: ['instances'],
@@ -38,7 +107,7 @@ export default function InstanceStatsPage() {
     queryKey: ['instance-stats', id],
     queryFn: () => api<StatItem[]>(`/api/instances/${id}/stats`),
     refetchInterval: 10_000,
-    enabled: !!id,
+    enabled: !!id && mode === 'polling',
   })
   const metricsProbe = useQuery({
     queryKey: ['metrics-probe', id],
@@ -48,7 +117,7 @@ export default function InstanceStatsPage() {
   })
 
   const instanceName = instances.data?.find((i) => String(i.id) === id)?.name ?? `实例 ${id}`
-  const list = stats.data ?? []
+  const list = mode === 'polling' ? (stats.data ?? []) : (live ?? [])
   const frontends = list.filter((s) => s.type === 'frontend')
   const backends = list.filter((s) => s.type === 'backend')
   const servers = list.filter((s) => s.type === 'server')
@@ -79,24 +148,41 @@ export default function InstanceStatsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{instanceName} · 监控</h1>
-          <p className="text-sm text-muted-foreground">每 10 秒自动刷新</p>
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            {mode === 'live' ? (
+              <>
+                <span className="size-1.5 animate-pulse rounded-full bg-green-600" />
+                实时推送中(SSE,5s)
+              </>
+            ) : mode === 'polling' ? (
+              '实时连接失败,已回落 10s 轮询'
+            ) : (
+              '正在建立实时连接…'
+            )}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link to={`/instances/${id}/config`}>返回配置</Link>
           </Button>
-          <Button variant="outline" size="sm" onClick={() => stats.refetch()}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (mode === 'polling') stats.refetch()
+            }}
+          >
             <RefreshCw className="mr-1 size-4" />
             刷新
           </Button>
         </div>
       </div>
 
-      {stats.isLoading ? (
+      {list.length === 0 && (mode === 'connecting' || (mode === 'polling' && stats.isLoading)) ? (
         <div className="flex justify-center py-16">
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
-      ) : stats.isError ? (
+      ) : mode === 'polling' && stats.isError ? (
         <Card>
           <CardContent className="pt-6 text-sm text-red-600">
             无法获取监控数据:{stats.error instanceof ApiError ? stats.error.message : '请求失败'}

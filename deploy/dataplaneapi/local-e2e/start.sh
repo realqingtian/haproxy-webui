@@ -9,6 +9,9 @@
 #    只等 pidfile 不够,socket 未就绪时 dataplaneapi 会静默退出(exit 1 无日志);
 # 4. 重试循环记录退出码到 /var/log/dpapi.log,便于排查。
 echo "container haproxy version: $(haproxy -v | head -1)" # 便于确认与真实节点的版本对齐情况
+# v0.11:sshd(日志尾部等服务管理链路的 SSH 测试)+ syslogd(haproxy 日志落 /var/log/haproxy.log)
+/usr/sbin/sshd
+syslogd -O /var/log/haproxy.log
 haproxy -W -db -p /var/run/haproxy.pid -f /etc/haproxy/haproxy.cfg &
 
 i=0
@@ -22,6 +25,7 @@ cat > /usr/local/bin/doreload <<'EOF'
 kill -USR2 "$(head -1 /var/run/haproxy.pid)"
 EOF
 chmod +x /usr/local/bin/doreload
+logger -t haproxy "local-e2e syslog ready"  # 日志文件首行标记,供流式读取测试
 
 mkdir -p /var/log /etc/haproxy/ssl
 # v0.7:显式指定 --ssl-certs-dir 才会注册 /v3/storage/ssl_certificates 路由(实测缺省时不注册,404)

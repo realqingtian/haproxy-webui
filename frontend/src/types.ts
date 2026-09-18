@@ -27,6 +27,8 @@ export interface Instance {
   sshUnit: string
   // 已记录的 host key 指纹(v0.9):空 = 下次连接信任首次(TOFU);非空 = 钉扎校验
   sshHostKey: string
+  // haproxy 日志文件路径(v0.11,可选):空 = /var/log/haproxy.log
+  logPath: string
   createdAt: string
   updatedAt: string
 }

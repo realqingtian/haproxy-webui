@@ -37,6 +37,7 @@ type instanceRequest struct {
 	SSHPrivateKey string `json:"sshPrivateKey"`
 	SSHUnit       string `json:"sshUnit"`
 	SSHHostKey    string `json:"sshHostKey"` // 已记录 host key 指纹;清空提交 = 重置为 TOFU
+	LogPath       string `json:"logPath"`    // haproxy 日志文件路径,空 = /var/log/haproxy.log
 }
 
 func (h *InstanceHandler) List(c *gin.Context) {
@@ -83,6 +84,7 @@ func applySSHRequest(inst *model.Instance, req *instanceRequest) error {
 	inst.SSHUser = req.SSHUser
 	inst.SSHUnit = req.SSHUnit
 	inst.SSHHostKey = strings.TrimSpace(req.SSHHostKey)
+	inst.LogPath = strings.TrimSpace(req.LogPath)
 	if req.SSHPassword != "" {
 		enc, err := cryptoutil.EncryptStored(req.SSHPassword)
 		if err != nil {

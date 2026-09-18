@@ -39,6 +39,7 @@ import { RevisionsTab } from '@/components/config/RevisionsTab'
 import { RawConfigView } from '@/components/config/RawConfigView'
 import { CertsTab } from '@/components/config/CertsTab'
 import { MapsTab } from '@/components/config/MapsTab'
+import { LogsTab } from '@/components/config/LogsTab'
 import { StagingDialog, type StagedItem } from '@/components/config/StagingDialog'
 
 const ADMIN_STATE_LABELS: Record<AdminState, string> = {
@@ -223,6 +224,7 @@ export default function InstanceConfigPage() {
             <TabsTrigger value="frontends">前端</TabsTrigger>
             <TabsTrigger value="certs">证书</TabsTrigger>
             <TabsTrigger value="maps">Maps</TabsTrigger>
+            <TabsTrigger value="logs">日志</TabsTrigger>
             <TabsTrigger value="revisions">版本历史</TabsTrigger>
             <TabsTrigger value="raw">原始配置</TabsTrigger>
           </TabsList>
@@ -435,6 +437,15 @@ export default function InstanceConfigPage() {
           {/* ---- Maps ---- */}
           <TabsContent value="maps">
             <MapsTab instanceId={id!} />
+          </TabsContent>
+
+          {/* ---- 日志尾部 ---- */}
+          <TabsContent value="logs">
+            <LogsTab
+              instanceId={id!}
+              sshConfigured={!!instances.data?.find((i) => String(i.id) === id)?.sshUser}
+              logPath={instances.data?.find((i) => String(i.id) === id)?.logPath}
+            />
           </TabsContent>
 
           {/* ---- 版本历史 ---- */}

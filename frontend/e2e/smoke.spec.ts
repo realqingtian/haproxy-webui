@@ -224,3 +224,42 @@ test('v0.7 配置搜索与证书冒烟', async ({ page }) => {
 
   rmSync(certDir, { recursive: true, force: true })
 })
+
+// v0.11:日志尾部冒烟 —— 实例带 SSH 指向 local-e2e 容器(内置 syslogd 日志文件),
+// 「日志」页签经 SSE 流式读取,应出现容器启动时写入的就绪标记行。
+test('v0.11 日志尾部冒烟', async ({ page }) => {
+  test.setTimeout(60_000)
+  const NODE = 'e2e-node-logs'
+
+  await page.goto('/login')
+  await page.getByLabel('用户名').fill('admin')
+  await page.getByLabel('密码').fill('admin123')
+  await page.getByRole('button', { name: '登录' }).click()
+  await expect(page).toHaveURL('/')
+
+  await page.getByRole('button', { name: '实例管理' }).click()
+  await page.getByRole('button', { name: '添加实例' }).click()
+  await page.getByLabel('名称').fill(NODE)
+  await page.getByLabel('地址', { exact: true }).fill('http://localhost:5555')
+  await page.getByLabel('用户名', { exact: true }).fill('dataplaneapi')
+  await page.getByLabel('密码', { exact: true }).fill('demosecret')
+  // SSH 配置(容器内置 sshd):root / devroot @ 2222
+  await page.getByLabel('SSH 地址').fill('127.0.0.1')
+  await page.getByLabel('端口', { exact: true }).fill('2222')
+  await page.getByLabel('SSH 用户名').fill('root')
+  await page.getByLabel('SSH 密码').fill('devroot')
+  await page.getByRole('button', { name: '保存' }).click()
+  await expect(page.getByText(NODE)).toBeVisible()
+
+  await page.getByRole('button', { name: '配置管理' }).click()
+  await expect(page.getByRole('heading', { name: /配置管理/ })).toBeVisible()
+  await page.getByRole('tab', { name: '日志' }).click()
+  await expect(page.getByText('local-e2e syslog ready').first()).toBeVisible({ timeout: 15_000 })
+
+  // 清理
+  await page.getByRole('button', { name: '实例管理' }).click()
+  const delRow = page.getByRole('row').filter({ hasText: NODE })
+  await delRow.locator('button').last().click()
+  await page.getByRole('dialog').getByRole('button', { name: '删除' }).click()
+  await expect(page.getByText('实例已删除')).toBeVisible()
+})

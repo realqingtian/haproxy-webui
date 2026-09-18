@@ -14,7 +14,12 @@
 ARG ALPINE_VERSION=3.19
 FROM alpine:${ALPINE_VERSION}
 
-RUN apk add --no-cache haproxy curl
+# openssh + syslogd(v0.11):SSH 供日志尾部等服务管理链路测试;busybox syslogd 落 haproxy 日志
+RUN apk add --no-cache haproxy curl openssh \
+    && ssh-keygen -A \
+    && echo 'root:devroot' | chpasswd \
+    && sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config \
+    && sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
 ARG DPAPI_VERSION=3.4.3
 ARG DPAPI_ARCH=arm64
