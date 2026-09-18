@@ -335,13 +335,22 @@ NoNewPrivileges=true 存量问题,v0.7 真机验收时定位并修复(见 v0.7 �
 > SSE 零新依赖且 Bearer 鉴权头天然可用(EventSource 不支持自定义头,前端用 fetch 流式
 > 读取 + 自动重连);日志尾部复用 v0.7 的 SSH 通道执行 tail -f 流式转发。
 
-- [ ] SSE 基建:BFF `GET /api/instances/:id/stats/stream`(服务端周期拉 dataplaneapi
-      后推送 JSON 事件;连接生命周期管理与超时)
-- [ ] stats 页接入 SSE:实时数据改订阅推送,连接失败自动回落现有轮询
-- [ ] 日志尾部:实例可选配置 haproxy 日志路径(默认 /var/log/haproxy.log),BFF 经 SSH
-      `tail -n 200 -f` 经 SSE 流式转发;前端实例配置页「日志」页签(暂停 / 清屏 / 关键字过滤,
-      缓冲上限防内存膨胀);local-e2e 容器补 syslogd 使 haproxy 日志落文件以支撑测试
-- [ ] 收尾:测试 + e2e 用例 + README / PLAN 同步
+- [x] SSE 基建(2026-09-18 完成):`GET /api/instances/:id/stats/stream` 每 5s 拉
+      dataplaneapi 全量 stats 推 JSON 事件(text/event-stream + Flush;拉取失败输出注释行
+      保持连接,由连通性告警兜底);客户端断开(请求 ctx 取消)即结束
+- [x] stats 页接入 SSE(2026-09-18 完成):useStatsStream hook 以 fetch 流式读取
+      (Bearer 头天然可用),解析 data 帧更新数据;连续失败 3 次自动回落 10s 轮询
+      (useQuery enabled 联动),页头显示「实时推送中 / 已回落轮询」状态
+- [x] 日志尾部(2026-09-18 完成):Instance 增 LogPath(可选,默认 /var/log/haproxy.log);
+      systemd 包抽出不带响应体的 dial() 并新增 TailStream(SSH tail -n 200 -f 逐行回调,
+      ctx 取消即断连);`GET /:id/logs/stream` SSE 逐行 JSON 推送(需 SSH,登录可读,
+      路径白名单校验防注入);前端「日志」页签(暂停 / 清屏 / 关键字过滤 / 重连,
+      缓冲上限 2000 行);local-e2e 容器补 busybox syslogd + /dev/log 目标 + sshd
+      (2222 端口)使日志落文件、链路可测
+- [x] 收尾(2026-09-18 完成):make test 八包全绿(stats 流 / 日志流进程内测试 +
+       未配置 400 + 非法路径 400)、test-integration 四用例通过(新增容器级日志流:
+       经 SSH tail 断言就绪标记行)、e2e 4 passed(新增日志尾部冒烟:浏览器全链路)、
+       vet + 前端构建 + markdownlint 零告警;README 功能表同步
 
 ## v0.12 体验覆盖:移动端适配与多语言(2026-09-18 排期)
 
