@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { diffLines } from 'diff'
 import { Eye, Loader2, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -37,6 +38,7 @@ export function StagingDialog(props: {
   onClear: () => void
   onCommit: () => void
 }) {
+  const { t } = useTranslation()
   const { open, instanceId, onClose, items, saving, onRemove, onClear, onCommit } = props
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -57,7 +59,7 @@ export function StagingDialog(props: {
       })
       setPreview(r)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '生成预览失败')
+      toast.error(err instanceof ApiError ? err.message : t('staging.previewFailed'))
     } finally {
       setPreviewLoading(false)
     }
@@ -65,16 +67,16 @@ export function StagingDialog(props: {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>待提交清单({items.length} 条)</DialogTitle>
+          <DialogTitle>{t('staging.title', { count: items.length })}</DialogTitle>
           <DialogDescription>
-            提交时按顺序在单个事务内应用:任一步失败整体回滚,全部通过才触发一次优雅 reload
+            {t('staging.desc')}
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-72 space-y-2 overflow-auto py-1">
           {items.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">暂无待提交操作</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">{t('staging.empty')}</p>
           ) : (
             items.map((item, i) => (
               <div
@@ -90,7 +92,7 @@ export function StagingDialog(props: {
                   size="icon-sm"
                   className="shrink-0 text-muted-foreground hover:text-foreground"
                   onClick={() => onRemove(item.key)}
-                  aria-label={`移除第 ${i + 1} 条`}
+                  aria-label={t('staging.removeAria', { n: i + 1 })}
                 >
                   <X className="size-3.5" />
                 </Button>
@@ -110,7 +112,7 @@ export function StagingDialog(props: {
             onClick={onClear}
           >
             <Trash2 className="mr-1 size-4" />
-            清空
+            {t('staging.clear')}
           </Button>
           <div className="flex gap-2">
             <Button
@@ -124,14 +126,14 @@ export function StagingDialog(props: {
               ) : (
                 <Eye className="mr-1 size-4" />
               )}
-              diff 预览
+              {t('staging.diffPreview')}
             </Button>
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button type="button" disabled={items.length === 0 || saving} onClick={onCommit}>
               {saving && <Loader2 className="mr-1 size-4 animate-spin" />}
-              提交({items.length} 条,一次 reload)
+              {t('staging.submit', { count: items.length })}
             </Button>
           </div>
         </DialogFooter>
@@ -142,6 +144,7 @@ export function StagingDialog(props: {
 
 // DiffView 统一 diff 风格渲染:新增绿、删除红,长段未变内容折叠为省略行。
 function DiffView({ current, preview }: PreviewResult) {
+  const { t } = useTranslation()
   const parts = diffLines(current, preview)
   const rows: React.ReactNode[] = []
   for (let i = 0; i < parts.length; i++) {
@@ -173,7 +176,7 @@ function DiffView({ current, preview }: PreviewResult) {
   return (
     <div className="space-y-1">
       <p className="text-xs font-medium text-muted-foreground">
-        应用效果预览(事务内生成,未提交不生效)
+        {t('staging.previewTitle')}
       </p>
       <pre className="max-h-60 overflow-auto rounded-md bg-muted p-3 font-mono text-xs leading-relaxed">
         {rows}
@@ -187,5 +190,6 @@ function UnchangedRow({ line }: { line: string }) {
 }
 
 function FoldRow({ count }: { count: number }) {
-  return <div className="px-4 text-muted-foreground/60">…… 其余 {count} 行未变化 ……</div>
+  const { t } = useTranslation()
+  return <div className="px-4 text-muted-foreground/60">…… {t('staging.unchanged', { count })} ……</div>
 }
