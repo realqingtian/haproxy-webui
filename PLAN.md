@@ -55,9 +55,10 @@ reload,E2E 断言单条 reload);`go test ./...` 进 `make test`(容器级用例�
 无 Docker 自动跳过)、E2E 冒烟进 `make e2e`(1 passed);两个实例时选择器正常工作(rainyun-rcs + local-e2e
 容器实测,选择器带健康点直达配置页)。
 
-**当前状态**:M1–M5、v0.5 与 v0.6 均已完成(2026-09-17;M1–M5 存档见
-[docs/PLAN-M1-M5.md](docs/PLAN-M1-M5.md));v0.6 仅余真机走查一项(见下方 v0.6 段末),
-需要用户提供群机器人 webhook 并授权节点操作;改动全部停留工作区待审查。
+**当前状态**:M1–M5、v0.5 与 v0.6 均已完成(2026-09-17/18,含雨云节点真机验收;M1–M5 存档见
+[docs/PLAN-M1-M5.md](docs/PLAN-M1-M5.md))。v0.6 代码与文档已推送 GitHub(80bcee5..4062090);
+真机验收期间顺带确认:定时巡检已在真实节点抓到漂移快照(revision #18,source=scheduled)。
+下一期规划见 docs/ROADMAP.md 需求池与技术债表。
 
 ## v0.6 运维与可观测(2026-09-17 开工)
 
@@ -115,8 +116,14 @@ reload,E2E 断言单条 reload);`go test ./...` 进 `make test`(容器级用例�
       / compose 文档同步
       (2026-09-17 收尾完成:后端 go test 六包全绿,make test-integration 在 haproxy 2.8 容器下通过,
        Playwright 两条冒烟 2 passed(核心链路 + 告警与巡检);文档四处同步完毕)
-- [ ] 真机验收:雨云节点人为制造 reload 失败收通知、改密后旧 token 失效走查
-      (自动化等价验证已达成,见上;真机走查需用户提供群机器人 webhook 并授权节点操作,待执行)
+- [x] 真机验收:雨云节点人为制造 reload 失败收通知、改密后旧 token 失效走查
+      (2026-09-18 完成:本地后端连真实库启动(旧派生密钥兼容路径正常),飞书渠道测试发送
+       code:0;真实节点提交绑定 0.0.0.0:5555(已占用端口)的前端——事务提交成功而 reload
+       必然失败,后台监视器轮询确认 failed,审计落 reload.failed,告警推送飞书成功
+       (sent via feishu-rainyun);随即回滚基线快照,节点配置零残留。改密走查用临时 operator
+       账号:改密前旧 token 200,自改密码后旧 token 401、新密码登录 200,临时账号已删。
+       过程中发现并修复渠道测试接口的 nil-pointer panic(map 字面量两侧表达式都会求值),
+       已补强测试覆盖渠道测试发送路径)
 
 **验收**(ROADMAP):人为制造 reload 失败能收到通知;改密后旧 token 失效。
 
