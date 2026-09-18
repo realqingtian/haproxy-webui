@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 )
 
@@ -111,6 +112,36 @@ func (c *Client) deleteJSON(ctx context.Context, path string) error {
 		return fmt.Errorf("%s returned %d: %s", path, resp.StatusCode, string(body))
 	}
 	return nil
+}
+
+// postMultipart 以 multipart/form-data 上传 file_upload 字段并解码 JSON 响应
+// (storage 证书 / map 文件上传共用)。
+func (c *Client) postMultipart(ctx context.Context, path, filename string, content []byte, out any) error {
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	fw, err := mw.CreateFormFile("file_upload", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := fw.Write(content); err != nil {
+		return err
+	}
+	if err := mw.Close(); err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, &body)
+	if err != nil {
+		return err
+	}
+	req.SetBasicAuth(c.username, c.password)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return fmt.Errorf("connect dataplaneapi: %w", err)
+	}
+	defer resp.Body.Close()
+	return decodeResponse(resp, http.StatusCreated, path, out)
 }
 
 // readText GET 并以文本形式返回响应体(如 configuration/raw 的 text/plain)。

@@ -26,6 +26,8 @@ type fakeDataplane struct {
 	staged        map[string][]stagedOp     // txID -> 待生效操作
 	certs         map[string]map[string]any // 证书存储:文件名 -> 元数据(模拟 storage ssl_certificates)
 	certsDisabled bool                      // 模拟节点未启用 --ssl-certs-dir(路由 404)
+	mapsRuntime   map[string][]mapEntryFake // 生效中的 runtime map:文件名 -> 条目
+	mapsStorage   map[string]string         // map 文件:文件名 -> 内容
 	seq           int
 	starts        int
 	commits       int
@@ -33,6 +35,12 @@ type fakeDataplane struct {
 	lastPush      string // 最近一次 raw 整体推送(回滚路径)
 	nextReload    string // 下一次 reload 查询返回的状态,默认 succeeded
 	reloadPolls   int    // reloads/:id 被查询次数(验证监视器确实在轮询)
+}
+
+type mapEntryFake struct {
+	id    string
+	key   string
+	value string
 }
 
 type stagedOp struct {
@@ -159,6 +167,137 @@ func (f *fakeDataplane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			status = "succeeded"
 		}
 		writeJSON(http.StatusOK, map[string]any{"id": path[strings.LastIndex(path, "/")+1:], "status": status})
+
+	// ---- storage/runtime maps(v0.10):形态对齐 3.4.3 实测(条目按 key 定位) ----
+	case r.Method == http.MethodGet && path == "/v3/services/haproxy/runtime/maps":
+		list := make([]map[string]any, 0, len(f.mapsRuntime))
+		i := 0
+		for name, entries := range f.mapsRuntime {
+			list = append(list, map[string]any{
+				"id": fmt.Sprintf("%d", i), "storage_name": name,
+				"file":        "/etc/haproxy/maps/" + name,
+				"description": fmt.Sprintf("entry_cnt=%d", len(entries)),
+			})
+			i++
+		}
+		writeJSON(http.StatusOK, list)
+
+	case r.Method == http.MethodGet && path == "/v3/services/haproxy/storage/maps":
+		list := make([]map[string]any, 0, len(f.mapsStorage))
+		for name := range f.mapsStorage {
+			list = append(list, map[string]any{
+				"storage_name": name, "file": "/etc/haproxy/maps/" + name,
+				"description": "managed map file",
+			})
+		}
+		writeJSON(http.StatusOK, list)
+
+	case r.Method == http.MethodGet && strings.HasPrefix(path, "/v3/services/haproxy/storage/maps/"):
+		name := strings.TrimPrefix(path, "/v3/services/haproxy/storage/maps/")
+		content, ok := f.mapsStorage[name]
+		if !ok {
+			writeJSON(http.StatusNotFound, map[string]any{"code": 404, "message": "missing object"})
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprint(w, content)
+
+	case r.Method == http.MethodPost && path == "/v3/services/haproxy/storage/maps":
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			writeJSON(http.StatusBadRequest, map[string]any{"code": 400, "message": "bad multipart"})
+			return
+		}
+		file, hdr, err := r.FormFile("file_upload")
+		if err != nil {
+			writeJSON(http.StatusBadRequest, map[string]any{"code": 400, "message": "missing file_upload"})
+			return
+		}
+		content, _ := io.ReadAll(file)
+		_ = file.Close()
+		f.mapsStorage[hdr.Filename] = string(content)
+		writeJSON(http.StatusCreated, map[string]any{"storage_name": hdr.Filename})
+
+	case r.Method == http.MethodGet && strings.HasPrefix(path, "/v3/services/haproxy/runtime/maps/") && strings.HasSuffix(path, "/entries"):
+		name := path[len("/v3/services/haproxy/runtime/maps/") : len(path)-len("/entries")]
+		entries, ok := f.mapsRuntime[name]
+		if !ok {
+			writeJSON(http.StatusNotFound, map[string]any{"code": 404,
+				"message": "/var/run/haproxy.sock [3]  Unknown map identifier. Please use #<id> or <file>."})
+			return
+		}
+		list := make([]map[string]any, 0, len(entries))
+		for _, e := range entries {
+			list = append(list, map[string]any{"id": e.id, "key": e.key, "value": e.value})
+		}
+		writeJSON(http.StatusOK, list)
+
+	case r.Method == http.MethodPost && strings.HasPrefix(path, "/v3/services/haproxy/runtime/maps/") && strings.HasSuffix(path, "/entries"):
+		name := strings.TrimSuffix(strings.TrimPrefix(path, "/v3/services/haproxy/runtime/maps/"), "/entries")
+		entries, ok := f.mapsRuntime[name]
+		if !ok {
+			writeJSON(http.StatusNotFound, map[string]any{"code": 404, "message": "Unknown map"})
+			return
+		}
+		var body struct{ Key, Value string }
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		for _, e := range entries {
+			if e.key == body.Key {
+				writeJSON(http.StatusBadRequest, map[string]any{"code": 400, "message": "key already exists"})
+				return
+			}
+		}
+		e := mapEntryFake{id: fmt.Sprintf("0xff%x", len(entries)+7), key: body.Key, value: body.Value}
+		f.mapsRuntime[name] = append(entries, e)
+		if r.URL.Query().Get("force_sync") == "true" {
+			f.syncMapFile(name)
+		}
+		writeJSON(http.StatusCreated, map[string]any{"key": body.Key, "value": body.Value})
+
+	case (r.Method == http.MethodPut || r.Method == http.MethodDelete) && strings.Contains(path, "/runtime/maps/"):
+		// 形态:/runtime/maps/{name}/entries/{key}[?force_sync=true]
+		rest := strings.TrimPrefix(path, "/v3/services/haproxy/runtime/maps/")
+		parts := strings.Split(rest, "/") // {name} entries {key}
+		if len(parts) != 3 || parts[1] != "entries" {
+			writeJSON(http.StatusNotFound, map[string]any{"code": 404, "message": "unhandled " + path})
+			return
+		}
+		name, key := parts[0], parts[2]
+		entries, ok := f.mapsRuntime[name]
+		if !ok {
+			writeJSON(http.StatusNotFound, map[string]any{"code": 404, "message": "Unknown map"})
+			return
+		}
+		found := -1
+		for i, e := range entries {
+			if e.key == key {
+				found = i
+				break
+			}
+		}
+		if r.Method == http.MethodPut {
+			var body struct{ Value string }
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if found < 0 { // set map 为 upsert
+				entries = append(entries, mapEntryFake{id: "0xffnew", key: key, value: body.Value})
+			} else {
+				entries[found].value = body.Value
+			}
+			f.mapsRuntime[name] = entries
+			if r.URL.Query().Get("force_sync") == "true" {
+				f.syncMapFile(name)
+			}
+			writeJSON(http.StatusOK, map[string]any{"key": key, "value": body.Value})
+			return
+		}
+		if found < 0 {
+			writeJSON(http.StatusNotFound, map[string]any{"code": 404, "message": "Key not found"})
+			return
+		}
+		f.mapsRuntime[name] = append(entries[:found], entries[found+1:]...)
+		if r.URL.Query().Get("force_sync") == "true" {
+			f.syncMapFile(name)
+		}
+		w.WriteHeader(http.StatusNoContent)
 
 	// ---- storage ssl_certificates(v0.7):只在「启用」时模拟,形态对齐 3.4.3 实测 ----
 	case f.certsDisabled && strings.Contains(path, "/storage/ssl_certificates"):
@@ -295,6 +434,16 @@ func (f *fakeDataplane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(http.StatusNotFound, map[string]any{"error": "unhandled " + r.Method + " " + path})
 	}
+}
+
+// syncMapFile 对齐 force_sync 语义:按当前 runtime 条目重写存储文件内容。
+func (f *fakeDataplane) syncMapFile(name string) {
+	entries := f.mapsRuntime[name]
+	var b strings.Builder
+	for _, e := range entries {
+		b.WriteString(e.key + " " + e.value + "\n")
+	}
+	f.mapsStorage[name] = b.String()
 }
 
 func (f *fakeDataplane) stage(r *http.Request, op stagedOp) {

@@ -62,6 +62,15 @@ func newTestEnvWithDB(t *testing.T) (*gin.Engine, *fakeDataplane, *gorm.DB) {
 		servers: map[string][]string{},
 		staged:  map[string][]stagedOp{},
 		certs:   map[string]map[string]any{},
+		mapsRuntime: map[string][]mapEntryFake{
+			"hosts.map": {
+				{id: "0xff1", key: "app.local", value: "demo_app"},
+				{id: "0xff2", key: "test.local", value: "demo_app"},
+			},
+		},
+		mapsStorage: map[string]string{
+			"hosts.map": "app.local demo_app\ntest.local demo_app\n",
+		},
 	}
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)

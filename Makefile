@@ -23,7 +23,7 @@ test:
 # 容器不可达时该用例自动跳过,所以 `make test` 无 Docker 也全绿
 test-integration:
 	cd deploy/dataplaneapi/local-e2e && docker compose up -d --build --wait
-	cd backend && HAPROXY_WEBUI_IT_DPAPI=http://localhost:5555 go test ./internal/api/ -run 'TestContainerRealDataplaneFlow|TestContainerSSLCertificates' -v
+	cd backend && HAPROXY_WEBUI_IT_DPAPI=http://localhost:5555 go test ./internal/api/ -run 'TestContainerRealDataplaneFlow|TestContainerSSLCertificates|TestContainerMapsFlow' -v
 
 check: test
 	cd backend && go vet ./...

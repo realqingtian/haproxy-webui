@@ -18,7 +18,7 @@ Type=simple
 User=dpapi
 Group=dpapi
 # 事务与 spoe 临时目录属主(以 root 前置执行);证书目录供 WebUI「证书管理」使用
-ExecStartPre=+/bin/sh -c "mkdir -p /tmp/spoe-haproxy /tmp/haproxy && chown -R dpapi:dpapi /tmp/spoe-haproxy /tmp/haproxy && mkdir -p /etc/haproxy/ssl && chown dpapi:dpapi /etc/haproxy/ssl"
+ExecStartPre=+/bin/sh -c "mkdir -p /tmp/spoe-haproxy /tmp/haproxy && chown -R dpapi:dpapi /tmp/spoe-haproxy /tmp/haproxy && mkdir -p /etc/haproxy/ssl /etc/haproxy/maps && chown dpapi:dpapi /etc/haproxy/ssl /etc/haproxy/maps"
 ExecStart=/usr/local/bin/dataplaneapi \
     --config-file /etc/haproxy/haproxy.cfg \
     --userlist dataplaneapi \

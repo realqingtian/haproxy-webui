@@ -24,6 +24,7 @@ RUN tar -xzf /tmp/dpapi.tar.gz -C /tmp \
     && rm -rf /tmp/dpapi.tar.gz /tmp/dataplaneapi /tmp/LICENSE /tmp/CHANGELOG.md
 
 COPY haproxy.cfg /etc/haproxy/haproxy.cfg
+COPY maps/hosts.map /etc/haproxy/maps/hosts.map
 COPY start.sh /start.sh
 
 EXPOSE 5555 8404

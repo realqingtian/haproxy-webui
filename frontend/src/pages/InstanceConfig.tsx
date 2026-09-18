@@ -38,6 +38,7 @@ import { TemplateDialog } from '@/components/config/TemplateDialog'
 import { RevisionsTab } from '@/components/config/RevisionsTab'
 import { RawConfigView } from '@/components/config/RawConfigView'
 import { CertsTab } from '@/components/config/CertsTab'
+import { MapsTab } from '@/components/config/MapsTab'
 import { StagingDialog, type StagedItem } from '@/components/config/StagingDialog'
 
 const ADMIN_STATE_LABELS: Record<AdminState, string> = {
@@ -221,6 +222,7 @@ export default function InstanceConfigPage() {
             <TabsTrigger value="backends">后端与服务器</TabsTrigger>
             <TabsTrigger value="frontends">前端</TabsTrigger>
             <TabsTrigger value="certs">证书</TabsTrigger>
+            <TabsTrigger value="maps">Maps</TabsTrigger>
             <TabsTrigger value="revisions">版本历史</TabsTrigger>
             <TabsTrigger value="raw">原始配置</TabsTrigger>
           </TabsList>
@@ -428,6 +430,11 @@ export default function InstanceConfigPage() {
           {/* ---- 证书 ---- */}
           <TabsContent value="certs">
             <CertsTab instanceId={id!} />
+          </TabsContent>
+
+          {/* ---- Maps ---- */}
+          <TabsContent value="maps">
+            <MapsTab instanceId={id!} />
           </TabsContent>
 
           {/* ---- 版本历史 ---- */}

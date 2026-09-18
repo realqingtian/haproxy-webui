@@ -244,3 +244,19 @@ export interface SSLCert {
   not_after: string
   size: number
 }
+
+// ---- v0.10 Runtime maps ----
+
+// GET /api/instances/:id/maps:runtime(生效)与 storage(文件)合并视图
+export interface MapFileView {
+  name: string
+  file: string
+  active: boolean
+  description: string
+}
+
+export interface MapEntryView {
+  id?: string
+  key: string
+  value: string
+}

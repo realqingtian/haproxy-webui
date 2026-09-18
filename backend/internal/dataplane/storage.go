@@ -1,11 +1,9 @@
 package dataplane
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"time"
@@ -54,33 +52,8 @@ func (c *Client) GetSSLCertificate(ctx context.Context, name string) (*SSLCertif
 // CreateSSLCertificate 上传 PEM 文件(文件名 name,如 demo.pem)。
 // dataplaneapi 校验证书内容,无效 PEM 返回 500;默认只写文件不触发 reload(201)。
 func (c *Client) CreateSSLCertificate(ctx context.Context, name string, pem []byte) (*SSLCertificate, error) {
-	var body bytes.Buffer
-	mw := multipart.NewWriter(&body)
-	fw, err := mw.CreateFormFile("file_upload", name)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := fw.Write(pem); err != nil {
-		return nil, err
-	}
-	if err := mw.Close(); err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+sslCertPath, &body)
-	if err != nil {
-		return nil, err
-	}
-	req.SetBasicAuth(c.username, c.password)
-	req.Header.Set("Content-Type", mw.FormDataContentType())
-
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("connect dataplaneapi: %w", err)
-	}
-	defer resp.Body.Close()
 	var out SSLCertificate
-	if err := decodeResponse(resp, http.StatusCreated, "create ssl certificate", &out); err != nil {
+	if err := c.postMultipart(ctx, sslCertPath, name, pem, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

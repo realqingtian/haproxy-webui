@@ -196,6 +196,19 @@ test('v0.7 配置搜索与证书冒烟', async ({ page }) => {
   await page.getByRole('dialog').getByRole('button', { name: '确认删除' }).click()
   await expect(page.getByText(/证书已删除/)).toBeVisible()
 
+  // ---- Maps 页签:条目增删(即时生效 + force_sync 持久化) ----
+  await page.getByRole('tab', { name: 'Maps' }).click()
+  await expect(page.getByText('生效中')).toBeVisible()
+  await page.getByRole('button', { name: '编辑条目' }).click()
+  const mapKey = `e2e_map_${UNIQUE}.local`
+  await page.getByLabel('Key', { exact: true }).fill(mapKey)
+  await page.getByLabel('Value', { exact: true }).fill('demo_app')
+  await page.getByRole('button', { name: '添加' }).click()
+  await expect(page.getByText('条目已添加')).toBeVisible()
+  await expect(page.getByText(mapKey)).toBeVisible()
+  await page.getByRole('button', { name: `删除 ${mapKey}` }).click()
+  await expect(page.getByText('条目已删除')).toBeVisible()
+
   // ---- 监控页:服务管理卡片未配置态 ----
   await page.getByRole('button', { name: '实例管理' }).click()
   await page.getByRole('row').filter({ hasText: NODE }).getByRole('link', { name: '监控' }).click()

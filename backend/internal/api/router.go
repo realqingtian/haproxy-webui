@@ -41,27 +41,27 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		apiGroup.GET("/auth/oidc/start", oidcHandler.Start)
 		apiGroup.GET("/auth/oidc/callback", oidcHandler.Callback)
 
-				protected := apiGroup.Group("", auth.Middleware(cfg.JWTSecret, db))
-				{
-					protected.GET("/auth/me", authHandler.Me)
-					protected.POST("/auth/refresh", authHandler.Refresh)
-					protected.PUT("/auth/password", userHandler.ChangePassword)
-					protected.GET("/health/instances", instanceHandler.Health)
-					protected.GET("/settings", settingsHandler.Get)
+		protected := apiGroup.Group("", auth.Middleware(cfg.JWTSecret, db))
+		{
+			protected.GET("/auth/me", authHandler.Me)
+			protected.POST("/auth/refresh", authHandler.Refresh)
+			protected.PUT("/auth/password", userHandler.ChangePassword)
+			protected.GET("/health/instances", instanceHandler.Health)
+			protected.GET("/settings", settingsHandler.Get)
 
-					clusters := protected.Group("/clusters")
+			clusters := protected.Group("/clusters")
+			{
+				clusters.GET("", clusterHandler.List)
+				clusters.GET("/:id/health", clusterHandler.ClusterHealth)
+				// v0.8:集群 VRRP 真实状态探测(keepalived + VIP 归属)
+				clusters.GET("/:id/vrrp", clusterHandler.VRRP)
+				writeClusters := clusters.Group("", auth.RequireRole(model.RoleAdmin, model.RoleOperator))
 				{
-					clusters.GET("", clusterHandler.List)
-					clusters.GET("/:id/health", clusterHandler.ClusterHealth)
-					// v0.8:集群 VRRP 真实状态探测(keepalived + VIP 归属)
-					clusters.GET("/:id/vrrp", clusterHandler.VRRP)
-					writeClusters := clusters.Group("", auth.RequireRole(model.RoleAdmin, model.RoleOperator))
-					{
-						writeClusters.POST("", clusterHandler.Create)
-						writeClusters.PUT("/:id", clusterHandler.Update)
-						writeClusters.DELETE("/:id", clusterHandler.Delete)
-					}
+					writeClusters.POST("", clusterHandler.Create)
+					writeClusters.PUT("/:id", clusterHandler.Update)
+					writeClusters.DELETE("/:id", clusterHandler.Delete)
 				}
+			}
 
 			admin := protected.Group("", auth.RequireRole(model.RoleAdmin))
 			{
@@ -97,6 +97,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				instances.GET("/:id/reloads/:reloadId", nodeHandler.ReloadStatus)
 				// v0.7 SSL 证书管理:元数据查看登录即可,上传 / 删除需 operator+
 				instances.GET("/:id/certs", nodeHandler.ListSSLCerts)
+				// v0.10 Runtime maps:列表 / 条目 / 文件内容登录即可,编辑需 operator+
+				instances.GET("/:id/maps", nodeHandler.ListMaps)
+				instances.GET("/:id/maps/:name/entries", nodeHandler.GetMapEntries)
+				instances.GET("/:id/maps/:name/content", nodeHandler.GetMapContent)
 				// v0.7 服务管理:状态查询登录即可,重启需 operator+
 				instances.GET("/:id/service", nodeHandler.ServiceStatus)
 				// 写操作需要 operator 及以上角色
@@ -118,6 +122,11 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 					write.DELETE("/:id/certs/:name", nodeHandler.DeleteSSLCert)
 					// v0.7 服务管理:远程重启 dataplaneapi(operator+)
 					write.POST("/:id/service/restart", nodeHandler.ServiceRestart)
+					// v0.10 Runtime maps:条目增删改与 map 上传(operator+)
+					write.POST("/:id/maps", nodeHandler.UploadMap)
+					write.POST("/:id/maps/:name/entries", nodeHandler.AddMapEntry)
+					write.PUT("/:id/maps/:name/entries/:key", nodeHandler.SetMapEntry)
+					write.DELETE("/:id/maps/:name/entries/:key", nodeHandler.DeleteMapEntry)
 				}
 			}
 
