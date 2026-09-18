@@ -1,24 +1,85 @@
-# HAProxy WebUI 开发计划与进度
+# HAProxy WebUI 项目全景(状态 · 决策 · 进度 · 规划)
 
-> **维护约定**:任务完成后把对应项 `[ ]` 改为 `[x]`,未完成的不动;新任务追加到对应里程碑下。
-> 每个里程碑的顺序即建议实施顺序,允许跨项并行。每期开工时,从 `docs/ROADMAP.md` 把对应任务搬入本文件追加里程碑段。
+> **本文件是项目唯一的进度真源与规划文档**:现状、里程碑总览、技术决策、各期明细、
+> 后续规划、技术债与已知风险都在这里。
+> 2026-09-18 文档整理:原 docs/PLAN-M1-M5.md(M1–M5 归档)、docs/ROADMAP.md(路线图)、
+> docs/quality-cleanup.md(清理批次)已并入本文件并删除,docs/ 目录不再保留;
+> 协作行为与 Git 提交规范独立在根目录 AGENTS.md;使用者文档见 README.md。
+> **维护约定**:任务完成后把对应条目 `[ ]` 改为 `[x]` 并附日期与验证方式,未完成的不动;
+> 新需求先进「五、后续规划」池,与用户确认范围并开工时,再升格为「四、各期明细」下的里程碑小节。
 
-## 技术决策记录
+## 一、当前状态(先看这里)
+
+- **已交付**:M1–M5、v0.5、v0.6 完成并推送 GitHub(最新 61ff6aa);
+  v0.7(服务管理与配置体验)、v0.8(keepalived 集群视角)于 2026-09-18 完成开发、
+  测试与真机 / 本地环境验收,改动在工作区待用户审查后提交。
+- **功能范围**:多实例 HAProxy 可视化管理(配置事务编辑 + 一次 reload + 快照回滚)、
+  运行时上下线与权重、监控大盘与集群 VRRP 视角、SSL 证书管理、dataplaneapi 服务管理
+  (远程重启)、告警通知(飞书 / 钉钉 / 企业微信)、定时巡检、RBAC + 会话安全 + 审计、
+  OIDC / SSO、k8s 部署清单。
+- **质量门禁**:`make test`(单测 + 进程内集成,无 Docker 依赖)、`make test-integration`
+  (真实 dataplaneapi 容器)、`make e2e`(Playwright 冒烟)三层全绿;markdownlint 零告警。
+- **下一批工作来源**:「五、后续规划」需求池与「七、已知风险」中的改进项,均未排期,
+  开工前需与用户确认范围。
+
+## 二、里程碑总览
+
+| 周期 | 主题 | 状态 | 关键交付 |
+| --- | --- | --- | --- |
+| M1 | 骨架与部署 | ✅ 2026-09-17 | 前后端骨架、JWT + RBAC、实例 CRUD、全套部署产物、节点实机安装验证 |
+| M2 | 只读展示 + 运行时控制 | ✅ 2026-09-17 | 配置与原文展示、server 上下线 / 权重、stats 仪表盘 |
+| M3 | 配置管理 | ✅ 2026-09-17 | 事务化编辑、版本快照与一键回滚、漂移同步 |
+| M4 | 平台化 | ✅ 2026-09-17 | 用户 / 审计页、凭据加密、配置模板、OIDC、k8s 清单、集群分组第一阶段 |
+| M5 | M4 收尾批次 | ✅ 2026-09-17 | dataplaneapi 脱离 root(dpapi + sudo 白名单,实机验证) |
+| v0.5 | 体验与质量 | ✅ 2026-09-17 | 批量暂存区(一次 reload)、diff 预览、三层测试体系、多实例体验、暗色 / 分页 / 分包 |
+| v0.6 | 运维与可观测 | ✅ 2026-09-17 | 定时巡检、告警通知、Prometheus 探测、会话吊销、审计增强、独立加密密钥 |
+| v0.7 | 服务管理与配置体验 | ✅ 2026-09-18(待提交) | dataplaneapi 服务管理(SSH)、配置搜索与跳转、SSL 证书管理;真机验收通过并修复节点存量问题 |
+| v0.8 | keepalived 集群视角 | ✅ 2026-09-18(待提交) | VRRP 真实状态探测 + 监控总览集群视图;本地双容器验证环境,failover 实测 |
+
+## 三、技术决策记录(现行有效)
 
 | 决策点 | 结论 | 说明 |
 | --- | --- | --- |
-| 管理通道 | HAProxy 官方 Data Plane API(dataplaneapi sidecar) | 不自研 haproxy.cfg 解析器,与 HAProxy Enterprise GUI 同底座;要求 HAProxy ≥ 1.9,建议 2.6+ |
+| 管理通道 | HAProxy 官方 Data Plane API(dataplaneapi sidecar) | 不自研 haproxy.cfg 解析器,与 HAProxy Enterprise GUI 同底座;要求 HAProxy ≥ 1.9,建议 2.6+(2026-09-17 选型,放弃 Roxy-WI 复用与纯 SSH 自研路线) |
 | BFF 语言 | Go + Gin | 单二进制部署,CGO 关闭 |
 | 存储 | SQLite(GORM + 纯 Go 驱动) | 仅元数据:实例 / 用户 / 审计 |
 | 前端 | React 19 + Vite + TS + shadcn/ui(radix)+ Tailwind v4 + TanStack Query | 包管理用 bun |
-| 认证 | JWT(Bearer,24h)+ bcrypt;OIDC/SSO(Authorization Code + PKCE,M5 起) | 本地账号登录可配置开关 |
+| 认证 | JWT(Bearer,24h)+ bcrypt;OIDC/SSO(Authorization Code + PKCE,M5 起已交付) | 本地账号登录可配置开关 |
 | RBAC | admin / operator / viewer | viewer 只读;写操作(含实例管理)需 operator+;用户管理需 admin |
-| 集群支持 | 单机与集群统一为"多实例"模型 | 一台 HAProxy = 一个实例;keepalived 主备展示归入集群分组(M5-3 第一阶段) |
-| 部署 | docker compose + systemd 裸机 + k8s(kustomize,M5 起) | 前端由 nginx 托管并反代 /api |
+| 集群支持 | 单机与集群统一为"多实例"模型 | 一台 HAProxy = 一个实例;VRRP 真实状态探测已于 v0.8 接入 |
+| 节点服务管理 | BFF 经 SSH 执行 systemctl(v0.7) | 不引入节点侧 agent;x/crypto/ssh 与既有 bcrypt 同模块;重启依赖节点 sudo 免密白名单 |
+| 部署 | docker compose + systemd 裸机 + k8s(kustomize,M5 起已交付) | 前端由 nginx 托管并反代 /api |
 
-## v0.5 体验与质量(2026-09-17 开工,纯本地可完成)
+## 四、各期明细
 
-> 目标:把已有能力打磨到"敢给团队日常用"的水平,不新增依赖环境。任务来源:docs/ROADMAP.md v0.5 段。
+### M1–M5(2026-09-17 一天内完成;完整过程存档见 git 历史)
+
+- **M1 骨架与部署**:前后端骨架与数据模型(users / instances / audit_log)、JWT + RBAC、
+  实例 CRUD 与连通性探测、审计、全套部署产物(compose / systemd / nginx / 节点侧
+  install.sh + cfg 片段)、local-e2e 单容器联调环境;雨云节点实机安装验证
+  (HAProxy 2.8.16 + dataplaneapi v3.4.3)。走查中修复登录 401 被误判为会话过期的问题。
+- **M2 只读展示 + 运行时控制**:实例管理页、配置与原文展示(15s 刷新)、server 运行时
+  上下线 / 权重(UI 明示「重启后失效」并写审计)、stats 仪表盘(10s 刷新);
+  RBAC 前后端联动实测(viewer 全只读)。直连取代 SSH 隧道(安全组放通 5555)。
+- **M3 配置管理**:事务封装(版本乐观锁)、可视化编辑(backend / server / frontend / bind /
+  ACL)、每次提交自动快照 + 一键回滚、「从服务器同步」重建基线处理漂移。
+- **M4 平台化**:用户管理与审计查询页、实例凭据 AES-256-GCM 加密(历史明文自动迁移)、
+  配置模板(HTTP / TCP 一键生成)、Prometheus 接入指引;keepalived 降级第一阶段
+  (集群分组模型与 UI)、OIDC / SSO(本地 dex 完整浏览器验证)、k8s kustomize 清单
+  (本机 kind 实测)。compose 容器停止、数据迁至 backend/data/ 应用户要求。
+- **M5 收尾批次**:dataplaneapi 脱离 root(专用用户 dpapi + sudo 白名单仅 reload/restart
+  haproxy,雨云实机回归);独立质量清理批次(原 docs/quality-cleanup.md,已并入本段):
+  审计写入去重、dataplane transport 归一、SQLite WAL + busy_timeout、登录限流
+  (1 分钟 5 次失败锁 1 分钟)、make test/check 目标、STRICT 严格生产模式。
+- **早期踩坑备忘**(实测得来,接新版本节点时注意):dataplaneapi 3.x 前缀 /v3(探活
+  /v3/info);release 资产 64 位 x86 命名是 x86_64;事务内写删返回 202(提交才生效);
+  bind 创建必须带 name;runtime 字段差异(weight JSON 数字、server 名字段为 name、
+  check 为 enabled/disabled 字符串);v3.4.3 不支持 backend ACL 写入(405,UI 已下线);
+  local-e2e 容器多次 USR2 后有多代进程残留、runtime 可能打到旧代(仅容器坑,真机无)。
+
+### v0.5 体验与质量(2026-09-17,纯本地可完成)
+
+> 目标:把已有能力打磨到"敢给团队日常用"的水平,不新增依赖环境。任务来源:路线图 v0.5 段。
 
 - [x] 配置批量暂存区(staging)(2026-09-17 v0.5 完成,真机 rainyun-rcs 走查):编辑操作跨对话框累积
       进「待提交清单」(常驻入口显示条数,支持逐条移除/一键清空),一次事务批量应用——实测 3 操作与
@@ -55,15 +116,9 @@ reload,E2E 断言单条 reload);`go test ./...` 进 `make test`(容器级用例�
 无 Docker 自动跳过)、E2E 冒烟进 `make e2e`(1 passed);两个实例时选择器正常工作(rainyun-rcs + local-e2e
 容器实测,选择器带健康点直达配置页)。
 
-**当前状态**:M1–M5、v0.5 与 v0.6 均已完成(2026-09-17/18,含雨云节点真机验收;M1–M5 存档见
-[docs/PLAN-M1-M5.md](docs/PLAN-M1-M5.md))。v0.6 代码与文档已推送 GitHub(80bcee5..4062090);
-真机验收期间顺带确认:定时巡检已在真实节点抓到漂移快照(revision #18,source=scheduled)。
-下一期规划见 docs/ROADMAP.md 需求池与技术债表。
+### v0.6 运维与可观测(2026-09-17)
 
-## v0.6 运维与可观测(2026-09-17 开工)
-
-> 目标:从"管理配置"扩展到"运维保障",具备告警与巡检能力。任务来源:docs/ROADMAP.md v0.6 段,
-> 实施顺序即下列顺序。
+> 目标:从"管理配置"扩展到"运维保障",具备告警与巡检能力。任务来源:路线图 v0.6 段。
 
 - [x] 基础设施:优雅停机(`http.Server` + signal)+ `Setting` 设置表与 `GET/PUT /api/settings`
       (admin),快照周期 / 探测周期 / 告警冷却存 DB,改完即生效无需重启
@@ -125,9 +180,112 @@ reload,E2E 断言单条 reload);`go test ./...` 进 `make test`(容器级用例�
        过程中发现并修复渠道测试接口的 nil-pointer panic(map 字面量两侧表达式都会求值),
        已补强测试覆盖渠道测试发送路径)
 
-**验收**(ROADMAP):人为制造 reload 失败能收到通知;改密后旧 token 失效。
+**验收**(路线图):人为制造 reload 失败能收到通知;改密后旧 token 失效——均达成
+(2026-09-17 进程内断言 + 2026-09-18 真机走查)。注:当时 reload 失败的根因之一是节点 unit 的
+NoNewPrivileges=true 存量问题,v0.7 真机验收时定位并修复(见 v0.7 节)。
 
-## 已知风险与注意事项(仍然有效)
+### v0.7 服务管理与配置体验(2026-09-18)
+
+> 目标:补齐节点侧运维闭环(dataplaneapi 服务管理),并从需求池提入两项纯本地可完成的功能。
+> 范围决策:keepalived 集群视角因节点未部署 keepalived,后经用户同意以本地 Docker 环境立项为 v0.8。
+
+- [x] dataplaneapi 服务管理:实例可选配置 SSH 连接(地址 / 端口 / 用户 / 密码或私钥,凭据走
+      既有加密存储),经 SSH 执行 systemctl 查询 dataplaneapi 服务状态(active/inactive/启动时间)
+      与远程重启。systemd 接口方案选 SSH:不引入节点侧 agent,与 M5-4 的 sudo 白名单同思路,
+      x/crypto/ssh 属既有直接依赖 golang.org/x/crypto 同模块,零新增模块依赖;unit 名可配且
+      只允许安全字符集,命令由白名单模板拼装防注入;前端实例监控页「服务管理」卡片
+      (状态展示登录可见,重启 operator+,审计留痕)
+      (2026-09-18 完成:internal/systemd 包(ValidUnit 白名单 + show 输出解析 + 错误消息
+       提取含 stdout 回退);Instance 增 SSH 六字段(端口/unit 缺省 22/dataplaneapi,凭据
+       EncryptStored 加密;SSHPort 迁移带 default:0,否则存量 SQLite 加 NOT NULL 列失败);
+       GET /:id/service 登录可读、POST /:id/service/restart operator+ +审计 service.restart;
+       常见失败译为可操作 hint(sudo 未免密 → NOPASSWD 白名单指引);
+       测试:systemd 单测 + 进程内集成(自建 in-process SSH 服务器,覆盖状态查询 / 重启 /
+       viewer 403 / sudo 免密未配置 hint / unit 注入 400 / 未配置态);
+       前端监控页服务管理卡片(重启确认对话框注明 dataplaneapi 中断不影响数据面)+
+       实例对话框 SSH 配置区)
+- [x] 配置搜索与跳转:配置页按 frontend / backend / server 名称即时过滤定位,raw 视图
+      按关键字跳转并高亮命中行
+      (2026-09-18 完成:配置页新增常驻搜索框;backend 卡片按名称或服务器名/地址过滤
+       (仅保留命中服务器行)、frontend 行按名称/默认后端/监听过滤、无匹配空态;新增
+       RawConfigView 组件:行号 + 命中行高亮 + 命中计数 + 上一个/下一个容器内定位
+       (避免整页滚动);E2E 断言过滤与原文命中计数)
+- [x] SSL 证书管理:基于 dataplaneapi storage ssl_certificates 接口,证书列表 / 上传 / 查看 /
+      删除;配置页新增「证书」页签;local-e2e 容器补 ssl 证书目录以支持集成验证
+      (2026-09-18 完成:实测 3.4.3 需显式 --ssl-certs-dir 才注册路由、上传为 multipart
+       file_upload、删除默认触发 reload(202+Reload-Id)、列表不解析元数据需逐个补查
+       ——BFF 已封装补全;名称白名单防路径穿越、PEM 本地预检、128KB 上限;上传不触发
+       reload,删除默认触发并让「引用未删 → reload 失败」立即暴露(前端删除对话框检查
+       raw 配置引用数并警示);证书页签含过期着色(30 天内黄 / 已过期红)、元数据详情、
+       viewer 只读;dataplaneapi storage 接口不提供内容读取,「查看」为元数据视图;
+       测试:进程内集成 + 容器级集成 TestContainerSSLCertificates;
+       local-e2e start.sh 与 deploy/dataplaneapi/dataplaneapi.service 均默认启用证书目录)
+- [x] 收尾:make test / test-integration / e2e 全绿;README 文档同步;真机走查重启 dataplaneapi
+      (2026-09-18 全部完成,用户授权后执行:自动化部分——make test 六包全绿、
+       make test-integration 两用例通过(haproxy 2.8 容器)、make e2e 3 passed(新增 v0.7 冒烟:
+       搜索过滤/原文跳转/证书上传查看删除/服务管理未配置态,global-setup 补 --build 保证镜像
+       随源码重建)、go vet + 前端构建 + markdownlint 零告警;真机走查——
+       ①服务状态展示:实例配 SSH(root + 私钥)后 GET /service 返回 active/running/启动时间;
+       ②远程重启:POST /service/restart 实测节点启动时间 09-17 09:31 → 09-18 03:54,共用 3 次
+       (含 unit 变更后再次重启)均成功;
+       ③证书链路:上传 → 列表含解析元数据(subject/有效期/序列号)→ 删除,reload succeeded,
+       ssl 目录清空、haproxy.cfg md5 前后一致(零残留),审计 cert.upload / cert.delete /
+       service.restart 齐全;
+       **验收发现并修复存量问题**:节点 unit 残留 M4 时期的 NoNewPrivileges=true,与 M5-4 的
+       dpapi sudo 白名单冲突——dataplaneapi 进程内发起的 reload 自 M5-4 起一直失败
+       (9/17 验收的 reload 失败被误归因于端口占用);已推送仓库版 unit
+       (NoNewPrivileges=false + --ssl-certs-dir)到节点并经 WebUI 重启生效,实测 reload
+       succeeded。遗留改进:证书删除触发的 reload 结果暂无后台监视(仅返回 reloadId),
+       后续可接入 reload 失败告警)
+
+### v0.8 keepalived 集群视角(2026-09-18,本地 Docker 验证)
+
+> 目标:补齐 keepalived 主备集群的 VRRP 真实状态探测(VIP 归属、主备角色一览)。
+> 环境决策:真实节点无 keepalived,经用户同意在本地 Docker 搭建双节点环境(unicast VRRP)
+> 作为验证环境(deploy/dev-keepalived/)。
+
+- [x] 验证环境:deploy/dev-keepalived/ 双容器(lb1/lb2,alpine + haproxy + keepalived +
+      openssh + dataplaneapi),固定 IP + unicast VRRP(容器网络无组播),sshd 供服务管理
+      SSH 链路;compose 端口与 dpapi-e2e 错开(5557/5558)
+      (2026-09-18 完成:环境一次搭成,实测 MASTER 持 VIP 172.28.255.100、BACKUP 无 VIP;
+       docker stop lb1 → lb2 约 4s 接管 VIP,docker start lb1 → 高优先级抢占回切,均符合预期)
+- [x] 后端探测:systemd 包增 KeepalivedStatus,角色推导 master/backup/fault;
+      GET /api/clusters/:id/vrrp 并发探测组内实例(未配 SSH 的实例标注),登录可读
+      (2026-09-18 完成:实现用 pgrep + ip addr 双命令——不依赖 systemd,容器 / alpine
+       节点同样可用;VIP 只在 Go 侧与 ip 输出精确比对(IPv4-mapped 兼容),不进命令串;
+       并发探测,未配 SSH / SSH 失败的节点单独标注不互相影响;单测覆盖 VIP 匹配矩阵,
+       集成测试(in-process SSH)覆盖 主/备/故障/未配 SSH 四态;真实验证环境实测与
+       failover 翻转一致)
+- [x] 前端:监控总览页集群分组内嵌 VRRP 状态(VIP + 各节点主/备/故障徽标 + 手动刷新)
+      (2026-09-18 完成:VrrpStrip 组件,主绿/备蓝/故障红,15s 轮询 + 刷新按钮,
+       未配 SSH 节点显示「未配置 SSH」;浏览器实测渲染与 failover 数据翻转正常)
+- [x] 收尾:make test 全绿 + 新用例;README 同步;本地环境实测主备状态与 failover
+      (2026-09-18 完成:make test 八包全绿;README 功能表增「集群视角」行 +
+       「keepalived 验证环境」使用说明 + 目录树;markdownlint 零告警)
+
+## 五、后续规划(需求池,未排期)
+
+> 有价值但未与用户确认排期的需求。开工前需确认范围,升格为里程碑小节。
+
+- Runtime maps 在线编辑
+- stats WebSocket 实时推送(替代 10s 轮询)
+- 移动端 / 窄屏适配
+- 多语言(i18n)
+- 节点 haproxy 日志尾部查看(需先设计节点侧日志接口方案)
+- 遗留改进(来自 v0.7/v0.8 验收):证书删除触发的 reload 结果接入后台监视与失败告警;
+  服务管理 SSH 的 host key 指纹校验(known_hosts 录入,见风险 8);
+  keepalived 主备切换告警(接飞书,当前仅展示)
+
+## 六、已知技术债(已全部偿清)
+
+| 债 | 影响 | 偿还记录 |
+| --- | --- | --- |
+| ~~dataplaneapi 以 root 运行~~ | — | M5-4(2026-09-17):专用用户 dpapi + sudo 白名单,雨云节点实机验证 |
+| ~~实例凭据加密密钥缺省派生自 JWT secret~~ | — | v0.6(2026-09-17):ENCRYPTION_KEY 非空时密钥仅由其派生,compose 必填,启动自动迁移历史密文 |
+| ~~前端单 chunk >500kB~~ | — | v0.5(2026-09-17):路由懒加载,入口 448kB 无警告 |
+| ~~local-e2e 容器内 haproxy 为 3.4、真实节点为 2.8~~ | — | v0.6(2026-09-17):镜像默认 alpine 3.19(haproxy 2.8.16)对齐真实节点 |
+
+## 七、已知风险与注意事项(仍然有效)
 
 1. **运行时 vs 持久化**:运行时上下线重启即失效,UI 必须明示该语义,持久化改动一律走配置 + reload。
 2. **配置漂移**:绕过 UI 的手工修改会导致状态不一致,依赖「从服务器同步」重建基线快照。
@@ -135,8 +293,16 @@ reload,E2E 断言单条 reload);`go test ./...` 进 `make test`(容器级用例�
    dataplaneapi 有 Basic Auth 且已非 root 运行(M5-4),但该端口为**明文 HTTP**——凭据可被链路窃听,且无频控。
    转生产前应收紧安全组来源 IP 或配 TLS。
 4. **JWT 密钥**:默认 dev 密钥仅限本地,生产必须通过环境变量覆盖(compose 中已强制校验)。
-5. **dataplaneapi 版本差异**:3.x 的 API 前缀是 `/v3`(2.x 为 `/v2`),探活为 `/v3/info`;release 资产命名中 64 位 x86 是 `x86_64`(amd64 只有包管理器格式)。BFF 客户端已对齐 v3,接入新版本节点时注意回归。
-6. **前端 401 语义**:登录接口的 401(密码错误)与其它接口的 401(会话过期)必须区分,api.ts 已通过 `authRedirect` 选项处理,新增登录类接口(如 OIDC 回调)时注意沿用。
+5. **dataplaneapi 版本差异**:3.x 的 API 前缀是 `/v3`(2.x 为 `/v2`),探活为 `/v3/info`;release 资产命名中
+   64 位 x86 是 `x86_64`(amd64 只有包管理器格式)。BFF 客户端已对齐 v3,接入新版本节点时注意回归。
+6. **前端 401 语义**:登录接口的 401(密码错误)与其它接口的 401(会话过期)必须区分,api.ts 已通过
+   `authRedirect` 选项处理,新增登录类接口(如 OIDC 回调)时注意沿用。
 7. **实例凭据加密密钥**:v0.6 起生产(compose)强制要求独立的 HAPROXY_WEBUI_ENCRYPTION_KEY;
    独立密钥生效后密钥不再依赖 JWT secret(轮换 JWT secret 不影响凭据),首次启动自动迁移历史密文;
    本地开发不设置时仍回落旧派生并告警,STRICT 模式拒绝启动。
+8. **服务管理 SSH(v0.7)安全边界**:SSH 密码 / 私钥与实例凭据同机制加密存储,但 host key
+   指纹校验暂未实现(首次连接不校验,理论上可被中间人)——与 dataplaneapi 明文 HTTP 同属
+   当前风险面,仅限可信网络使用,后续可加 known_hosts 指纹录入;远程重启要求节点侧 sudo
+   NOPASSWD 白名单,建议限定到具体 unit 的 systemctl restart。
+9. **存量 SQLite 库迁移**:对已有数据的表加 NOT NULL 列必须带 default(如 Instance.SSHPort 的
+   `default:0`),否则 AutoMigrate 报 Cannot add a NOT NULL column;新列默认值语义在代码侧兜底。

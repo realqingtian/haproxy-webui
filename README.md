@@ -9,13 +9,16 @@
 | 模块 | 你可以做什么 |
 | --- | --- |
 | 实例管理 | 注册多台 HAProxy 节点,一键连通性测试 |
-| 配置管理 | 可视化管理 frontend / backend / server / bind / ACL;编辑先进入待提交清单,可预览统一 diff,攒够后一次事务批量提交(只触发一次 reload),失败整体回滚;每次提交自动记录版本快照 |
+| 配置管理 | 可视化管理 frontend / backend / server / bind / ACL;编辑先进入待提交清单,可预览统一 diff,攒够后一次事务批量提交(只触发一次 reload),失败整体回滚;每次提交自动记录版本快照;支持按名称搜索过滤与配置原文高亮跳转 |
 | 运行时控制 | 服务器上线 / 维护 / 排空、调整权重——即时生效,不中断现有连接 |
 | 模板创建 | HTTP / TCP 负载均衡常用场景一键生成(frontend + backend + 服务器组) |
+| SSL 证书管理 | 浏览节点证书目录:列表 / 上传 / 删除,自动解析主体与有效期并高亮临期、过期证书;删除前检查配置引用(需节点启用证书存储,见节点接入) |
+| 服务管理 | 实例可选配置 SSH,实时查看 dataplaneapi 服务状态(active / PID / 启动时间)并远程重启(需 sudo 免密白名单;重启有确认对话框并记入审计) |
 | 版本历史 | 配置快照列表(标记手动 / 同步 / 定时巡检来源)、查看历史原文、一键回滚(带并发保护);支持"从服务器同步"消除漂移 |
 | 定时巡检 | 后台按可配周期抓取节点配置,与最近快照比对,发现绕过 WebUI 的手工修改即落「漂移」快照并显著标出 |
 | 监控 | 单实例 QPS / 连接数 / 流量 / 状态码实时大盘(10 秒刷新);监控总览页聚合全部实例健康与速率,按集群分组,点击下钻;实例监控页可探测节点 Prometheus /metrics 是否可访问并给接入指引 |
 | 告警通知 | reload 失败、节点连通性探测失败、backend 全部 DOWN 时推送飞书 / 钉钉 / 企业微信机器人 webhook(可配多渠道、可发测试消息;边沿触发 + 恢复通知 + 冷却防刷屏) |
+| 集群视角 | keepalived 主备集群的 VRRP 真实状态:监控总览页按集群展示 VIP 与各节点主 / 备 / 故障角色(复用实例级 SSH 配置,节点跑 keepalived 即可,无新增部署依赖;本地可用 deploy/dev-keepalived/ 双容器环境验证) |
 | 用户与权限 | 三种角色:管理员 / 操作员 / 只读;实例凭据 AES 加密存储;管理员可强制下线任意账号 |
 | 会话安全 | JWT 滑动续期;改密 / 重置密码 / 删除用户 / 强制下线后全部旧会话立即失效;改角色即时生效 |
 | 审计日志 | 谁在什么时候做了什么,全部可追溯;支持时间范围过滤与 CSV 导出 |
@@ -73,7 +76,7 @@ haproxy-webui/
 ├── frontend/                      # 前端(React 19 + Vite + TS + shadcn/ui + Tailwind v4,bun 管理)
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── config/            # 配置管理组件:编辑对话框 / 版本历史 / 配置模板
+│   │   │   ├── config/            # 配置管理组件:编辑对话框 / 版本历史 / 证书管理 / 原文高亮搜索
 │   │   │   ├── layout/            # 应用布局(侧边导航 / 顶栏 / 修改密码)
 │   │   │   └── ui/                # shadcn/ui 基础组件
 │   │   ├── lib/                   # API 客户端(JWT 注入)、格式化工具
@@ -96,20 +99,21 @@ haproxy-webui/
 │   │   ├── notify/                # 告警推送(飞书 / 钉钉 / 企业微信 webhook)
 │   │   ├── scheduler/             # 后台定时任务(快照巡检 / 健康探测 / 告警触发)
 │   │   ├── settings/              # 系统级键值配置(巡检周期等,运行时可改)
+│   │   ├── systemd/               # SSH 远程 systemd 管理(dataplaneapi 服务状态查询 / 重启)
 │   │   └── model/                 # 数据模型(用户 / 实例 / 审计 / 配置快照 / 设置 / 告警渠道)
 │   └── Dockerfile                 # 后端镜像:多阶段构建,纯静态二进制
 ├── deploy/
 │   ├── dataplaneapi/              # HAProxy 节点侧:一键安装脚本 / systemd / 配置片段
-│   │   └── local-e2e/             # 本地联调与测试环境(单容器 HAProxy + dataplaneapi,docker compose 化,集成/E2E 共用)
+│   │   ├── local-e2e/             # 本地联调与测试环境(单容器 HAProxy + dataplaneapi,docker compose 化,集成/E2E 共用)
+│   │   └── dev-keepalived/        # v0.8 本地 keepalived 双节点验证环境(unicast VRRP + sshd)
 │   ├── nginx/                     # 裸机部署的 nginx 站点配置
 │   ├── systemd/                   # 后端 systemd 服务单元
 │   ├── prometheus.md              # Prometheus 指标接入指引
 │   └── tunnel.sh                  # SSH 隧道备用方案(不开 5555 端口时,make tunnel)
-├── docs/                          # ROADMAP / M1–M5 计划归档 / 协作与质量文档
 ├── docker-compose.yml             # 整包编排(后端 + 前端 nginx)
 ├── Makefile                       # dev / build / docker-up / tunnel 快捷命令
-├── AGENTS.md                      # AI 协作规范(提交规范等)
-└── PLAN.md                        # 当前迭代进度与决策记录(M1–M5 已归档至 docs/)
+├── AGENTS.md                      # AI 协作与 Git 提交规范
+└── PLAN.md                        # 项目全景唯一文档:状态 / 里程碑 / 决策 / 进度 / 规划
 ```
 
 ## 本地开发
@@ -134,6 +138,20 @@ make e2e                # Playwright E2E 冒烟:自动编排容器 + 独立 DB �
 
 E2E 首次运行需安装浏览器:`cd frontend && bunx playwright install chromium`;需要 Docker 运行,8080/5173 端口空闲。
 
+### keepalived 验证环境(可选)
+
+没有真实 keepalived 主备时,可用本地 Docker 双容器环境验证「集群视角」与证书 / 服务管理链路:
+
+```bash
+docker compose -f deploy/dev-keepalived/docker-compose.yml up -d --build --wait
+# lb1(主)dataplaneapi http://localhost:5557,SSH 127.0.0.1:2222;lb2(备)5558 / 2223
+# SSH 账号 root / devroot(仅开发环境);VIP 172.28.255.100 在主节点上
+```
+
+WebUI 侧:建集群(填 VIP 172.28.255.100)→ 注册两实例并填入上述 SSH 配置 →
+「监控总览」集群卡片即可看到主 / 备角色;`docker exec kvrrp-lb1 pkill keepalived`
+可演示 failover(备机接管,页面状态随之翻转)。
+
 ## 生产部署
 
 ### 方式一:Docker Compose(推荐)
@@ -155,6 +173,20 @@ sudo ./deploy/dataplaneapi/install.sh   # 下载二进制 + 安装 systemd 服�
 # 将 deploy/dataplaneapi/haproxy.cfg.snippet 合并进 /etc/haproxy/haproxy.cfg
 sudo systemctl enable --now dataplaneapi
 ```
+
+可选能力需要在节点侧额外准备:
+
+- **SSL 证书管理**(配置页「证书」页签):dataplaneapi 需以 `--ssl-certs-dir`
+  指定证书目录——本仓库 `deploy/dataplaneapi/` 的 service 单元已默认启用
+  (自动创建 `/etc/haproxy/ssl`);存量节点手工增加该参数并重启 dataplaneapi,
+  未启用时该页签会展示修复指引。
+- **服务管理**(实例监控页「服务管理」卡片):在 WebUI 实例设置中填写 SSH
+  连接(地址 / 端口 / 用户 / 密码或私钥,均加密存储);重启功能需为 SSH 用户配置
+  sudo 免密白名单(状态查询不需要):
+
+  ```text
+  sshuser ALL=(root) NOPASSWD: /usr/bin/systemctl restart dataplaneapi
+  ```
 
 > **安全要求**:dataplaneapi 端口(5555)等同于负载均衡器的完全控制权。
 >
@@ -193,9 +225,7 @@ HAProxy 自带 Prometheus 导出器,按 [deploy/prometheus.md](deploy/prometheus
 
 ## 相关文档
 
-- [PLAN.md](PLAN.md) — 当前迭代进度与决策记录
-- [docs/PLAN-M1-M5.md](docs/PLAN-M1-M5.md) — M1–M5 里程碑进度与决策归档
-- [docs/ROADMAP.md](docs/ROADMAP.md) — 后续迭代路线图
-- [AGENTS.md](AGENTS.md) — AI 协作与提交规范
+- [PLAN.md](PLAN.md) — 项目全景:当前状态 / 里程碑 / 技术决策 / 各期明细 / 后续规划 / 已知风险
+- [AGENTS.md](AGENTS.md) — AI 协作与 Git 提交规范
 - [deploy/prometheus.md](deploy/prometheus.md) — 监控接入
 - [deploy/dataplaneapi/](deploy/dataplaneapi/) — 节点侧部署产物与本地联调环境
