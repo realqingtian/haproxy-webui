@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -128,6 +129,9 @@ func (h *NodeHandler) DeleteSSLCert(c *gin.Context) {
 	detail := "deleted"
 	if reloadID != "" {
 		detail = "deleted, reload " + reloadID
+		// v0.9:删除触发的 reload 与配置提交同路监视——失败同样告警 + 审计
+		go watchReloadStatus(h.db, c.Param("id"), client, reloadID,
+			fmt.Sprintf("证书删除 %s 后 reload 失败", name))
 	}
 	audit(c, "cert.delete", name, detail)
 	c.JSON(http.StatusOK, gin.H{"ok": true, "reloadId": reloadID})

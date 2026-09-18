@@ -12,10 +12,12 @@ import (
 	"haproxy-webui/backend/internal/notify"
 )
 
-// watchReloadStatus 在配置提交后台轮询 reload 结果:成功静默结束,失败则
-// 告警 + 审计。独立 ctx(请求返回后仍继续),总时长约 30s。
-// 仅事务化提交(commit 返回 reload-id)可跟踪;回滚走 raw 整体推送,无 reload-id 可查。
-func watchReloadStatus(db *gorm.DB, instanceID string, client *dataplane.Client, reloadID, note string) {
+// watchReloadStatus 在后台轮询 reload 结果:成功静默结束,失败则告警 + 审计。
+// 独立 ctx(请求返回后仍继续),总时长约 30s。
+// 跟踪两类来源:配置提交(commit 返回 reload-id)与证书删除(dataplaneapi 删除证书
+// 默认触发 reload,202 + Reload-Id);回滚走 raw 整体推送,无 reload-id 可查。
+// detail 是失败时的告警/审计描述前缀,由调用方按来源组装(如「配置提交后 reload 失败」)。
+func watchReloadStatus(db *gorm.DB, instanceID string, client *dataplane.Client, reloadID, detail string) {
 	if reloadID == "" {
 		return
 	}
@@ -49,7 +51,6 @@ func watchReloadStatus(db *gorm.DB, instanceID string, client *dataplane.Client,
 		return
 	}
 
-	detail := "配置提交后 reload 失败: " + note
 	db.Create(&model.AuditLog{
 		Action: "reload.failed", Target: inst.Name, Detail: detail,
 	})

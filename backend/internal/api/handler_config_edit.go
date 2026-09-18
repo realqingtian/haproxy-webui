@@ -133,7 +133,7 @@ func (h *NodeHandler) ApplyOps(c *gin.Context) {
 		Target: c.Param("id"), Detail: note, IP: c.ClientIP(),
 	})
 	// 后台跟踪本次 reload:失败则告警 + 审计,不阻塞响应
-	go watchReloadStatus(h.db, c.Param("id"), client, reloadID, note)
+	go watchReloadStatus(h.db, c.Param("id"), client, reloadID, "配置提交后 reload 失败: "+note)
 	c.JSON(http.StatusOK, gin.H{"ok": true, "reloadId": reloadID, "note": note})
 }
 
