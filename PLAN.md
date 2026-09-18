@@ -357,10 +357,18 @@ NoNewPrivileges=true 存量问题,v0.7 真机验收时定位并修复(见 v0.7 �
 > 来源:需求池。目标:窄屏可用 + 界面多语言。i18n 选 react-i18next(zh 默认,en 抽取),
 > 前端新增依赖会在实施时说明。
 
-- [ ] 移动端 / 窄屏适配:侧边栏窄屏抽屉化、表格窄屏策略(横向滚动 / 关键列优先)、
-      对话框窄屏全宽;375px 视口浏览器走查全部页面
-- [ ] 多语言 i18n:react-i18next 接入,全部页面文案抽取为 zh / en 资源文件,
-      顶栏语言切换并持久化偏好
+- [x] 移动端 / 窄屏适配(2026-09-18 完成):md 以下侧边栏改为汉堡按钮唤起的抽屉导航
+      (点遮罩 / 导航后自动关闭);主内容区内边距响应式(p-3 / sm:p-4 / md:p-6);
+      用户名在窄屏仅显示头像;Table 组件自带横向滚动、Dialog 自带窄屏宽度限制,均无需改动;
+      375px 视口浏览器走查仪表盘 / 实例管理 / 抽屉交互
+- [x] 多语言 i18n(2026-09-18 完成):react-i18next 接入(zh 默认、偏好持久化 localStorage),
+      顶栏语言切换(中文 / English)实时生效;**全部页面与组件的用户可见文案抽取完毕**
+      (src/i18n/zh.ts + en.ts 约 300 键:nav / common / layout / login / dashboard /
+      instances / config / stats / certs / maps / logs / service / monitoring / audit /
+      users / alerts / oidc / vrrp / dlg / staging / template / revisions;
+      en 缺失键回落中文)。设计决策:后端接口错误文案与审计摘要(config-ops)保持中文
+- [x] 收尾(2026-09-18 完成):make test 八包全绿、vet、前端构建、E2E 4 passed、
+      markdownlint 零告警;README 体验行更新为完整多语言覆盖
 - [ ] 收尾:测试 + e2e 适配 + README / PLAN 同步
 
 ## 七、已知风险与注意事项(仍然有效)
