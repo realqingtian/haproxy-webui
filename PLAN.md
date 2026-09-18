@@ -272,9 +272,9 @@ NoNewPrivileges=true 存量问题,v0.7 真机验收时定位并修复(见 v0.7 �
 - 移动端 / 窄屏适配
 - 多语言(i18n)
 - 节点 haproxy 日志尾部查看(需先设计节点侧日志接口方案)
-- 遗留改进(来自 v0.7/v0.8 验收):证书删除触发的 reload 结果接入后台监视与失败告警;
-  服务管理 SSH 的 host key 指纹校验(known_hosts 录入,见风险 8);
-  keepalived 主备切换告警(接飞书,当前仅展示)
+
+> v0.7/v0.8 验收遗留的三项改进(证书删除 reload 监视告警、host key 指纹校验、主备切换告警)
+> 已于 v0.9 完成,移出本池。
 
 ## 六、已知技术债(已全部偿清)
 
@@ -284,6 +284,32 @@ NoNewPrivileges=true 存量问题,v0.7 真机验收时定位并修复(见 v0.7 �
 | ~~实例凭据加密密钥缺省派生自 JWT secret~~ | — | v0.6(2026-09-17):ENCRYPTION_KEY 非空时密钥仅由其派生,compose 必填,启动自动迁移历史密文 |
 | ~~前端单 chunk >500kB~~ | — | v0.5(2026-09-17):路由懒加载,入口 448kB 无警告 |
 | ~~local-e2e 容器内 haproxy 为 3.4、真实节点为 2.8~~ | — | v0.6(2026-09-17):镜像默认 alpine 3.19(haproxy 2.8.16)对齐真实节点 |
+
+## v0.9 可靠性收尾(2026-09-18 开工)
+
+> 目标:清掉 v0.7/v0.8 验收遗留的三个改进项,补一份转生产安全清单。任务来源:遗留改进 +
+> 已知风险 3 / 8,范围为用户确认的「按建议完善」。
+
+- [x] 证书删除 reload 接入后台监视(2026-09-18 完成):watchReloadStatus 改为接收完整
+      失败描述,证书删除拿到 Reload-Id 后走同一监视器——进程内全链路测试(fake 返回 failed →
+      webhook 收到「证书删除 fail.pem 后 reload 失败」+ 审计 reload.failed)
+- [x] SSH host key 指纹校验(2026-09-18 完成):systemd 包 Fingerprint(格式对齐
+      ssh-keygen -lf)+ HostKeyCallback 钉扎;实例增 SSHHostKey 字段(非密钥,明文可见),
+      空 = 首连信任并自动回写(TOFU),非空 = 不匹配拒绝连接(提示重装 / 中间人,可重置重录);
+      ConfigFromInstance / Hint 移入 systemd 包供 api 与 scheduler 共用;
+      测试:TOFU 回写 / 钉扎匹配 / 指纹不符 502+hint(in-process SSH 服务器抽出为
+      internal/systemd/systemdtest 供 api 与 scheduler 共用);前端实例对话框展示指纹与重置
+- [x] keepalived 主备切换告警(2026-09-18 完成):scheduler 新增 VRRP 巡检(与连通性监控同周期,
+      仅探测配置了 SSH 且已入组的实例),角色相对上次已知状态变化即边沿告警
+      (notify 新增 KindVRRPChange「主备切换」+ 审计 vrrp.change);首轮静默建基线,
+      探测失败记 unknown 不覆盖已知角色(失联由连通性告警覆盖);
+      测试:diff 纯函数单测 + 全链路集成(fake SSH 双节点翻转 → webhook 一次 + 审计含
+      「lb1: 主 → 备 / lb2: 备 → 主」,角色不变不重复告警)
+- [x] README 转生产检查清单(2026-09-18 完成):admin 密码、5555 收紧、HTTPS、
+      SSH 最小授权、数据备份、告警链路验证六项自查;告警功能行补主备切换,服务管理行补指纹
+- [x] 收尾:make test / test-integration / e2e 全绿;PLAN / README 同步
+      (2026-09-18 完成:make test 八包全绿、test-integration 两用例通过、e2e 3 passed、
+       vet + 前端构建 + markdownlint 零告警)
 
 ## 七、已知风险与注意事项(仍然有效)
 
@@ -300,9 +326,9 @@ NoNewPrivileges=true 存量问题,v0.7 真机验收时定位并修复(见 v0.7 �
 7. **实例凭据加密密钥**:v0.6 起生产(compose)强制要求独立的 HAPROXY_WEBUI_ENCRYPTION_KEY;
    独立密钥生效后密钥不再依赖 JWT secret(轮换 JWT secret 不影响凭据),首次启动自动迁移历史密文;
    本地开发不设置时仍回落旧派生并告警,STRICT 模式拒绝启动。
-8. **服务管理 SSH(v0.7)安全边界**:SSH 密码 / 私钥与实例凭据同机制加密存储,但 host key
-   指纹校验暂未实现(首次连接不校验,理论上可被中间人)——与 dataplaneapi 明文 HTTP 同属
-   当前风险面,仅限可信网络使用,后续可加 known_hosts 指纹录入;远程重启要求节点侧 sudo
-   NOPASSWD 白名单,建议限定到具体 unit 的 systemctl restart。
+8. **服务管理 SSH(v0.7/v0.9)安全边界**:SSH 密码 / 私钥与实例凭据同机制加密存储;
+   host key 自 v0.9 起采用 TOFU + 钉扎(首连自动记录、此后不匹配拒绝)——残余风险窗口仅在
+   首次连接(可与节点控制台核对指纹后录入);远程重启要求节点侧 sudo NOPASSWD 白名单,
+   建议限定到具体 unit 的 systemctl restart。
 9. **存量 SQLite 库迁移**:对已有数据的表加 NOT NULL 列必须带 default(如 Instance.SSHPort 的
    `default:0`),否则 AutoMigrate 报 Cannot add a NOT NULL column;新列默认值语义在代码侧兜底。
