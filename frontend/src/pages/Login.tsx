@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,6 +19,7 @@ import { api, ApiError, cacheCurrentUser, setToken } from '@/lib/api'
 import type { LoginResponse } from '@/types'
 
 export default function LoginPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -45,12 +47,12 @@ export default function LoginPage() {
       )
       setToken(resp.token)
       cacheCurrentUser(resp.user)
-      toast.success(`欢迎回来,${resp.user.username}`)
+      toast.success(t('login.welcome', { name: resp.user.username }))
       navigate('/', { replace: true })
     } catch (err) {
-      let message = err instanceof ApiError ? err.message : '网络错误,请稍后重试'
+      let message = err instanceof ApiError ? err.message : t('login.networkError')
       if (message === 'invalid credentials') {
-        message = '用户名或密码错误'
+        message = t('login.badCredentials')
       }
       toast.error(message)
     } finally {
@@ -63,12 +65,12 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">HAProxy WebUI</CardTitle>
-          <CardDescription>登录以管理你的 HAProxy 集群</CardDescription>
+          <CardDescription>{t('login.subtitle')}</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="username">用户名</Label>
+              <Label htmlFor="username">{t('login.username')}</Label>
               <Input
                 id="username"
                 value={username}
@@ -79,7 +81,7 @@ export default function LoginPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="password">密码</Label>
+              <Label htmlFor="password">{t('login.password')}</Label>
               <Input
                 id="password"
                 type="password"
@@ -93,13 +95,13 @@ export default function LoginPage() {
           <CardFooter className="mt-6 flex-col gap-3">
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="mr-2 size-4 animate-spin" />}
-              登录
+              {t('login.submit')}
             </Button>
             {oidcEnabled && (
               <>
                 <div className="flex w-full items-center gap-3">
                   <Separator className="flex-1" />
-                  <span className="text-xs text-muted-foreground">或</span>
+                  <span className="text-xs text-muted-foreground">{t('login.or')}</span>
                   <Separator className="flex-1" />
                 </div>
                 <Button
@@ -110,7 +112,7 @@ export default function LoginPage() {
                     window.location.href = '/api/auth/oidc/start'
                   }}
                 >
-                  使用 SSO 登录
+                  {t('login.sso')}
                 </Button>
               </>
             )}

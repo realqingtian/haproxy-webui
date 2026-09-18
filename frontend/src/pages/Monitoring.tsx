@@ -21,6 +21,7 @@ import {
 import { SummaryCard } from '@/components/stats/SummaryCard'
 import { VrrpStrip } from '@/components/stats/VrrpStrip'
 import { api, ApiError } from '@/lib/api'
+import { useTranslation } from 'react-i18next'
 import { fmtNum } from '@/lib/format'
 import type { Cluster, ClusterVRRP, Instance, InstanceHealth, StatItem } from '@/types'
 import { cn } from '@/lib/utils'
@@ -28,6 +29,7 @@ import { cn } from '@/lib/utils'
 // 监控总览:全部实例的健康与流量聚合,按集群分组展示,点击实例行下钻单实例监控页。
 // stats 按实例并发拉取(复用 ['instance-stats', id] 缓存键,与单实例页共享)。
 export default function MonitoringPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
 
   const instances = useQuery({
@@ -72,7 +74,7 @@ export default function MonitoringPage() {
 
   const healthById = new Map((health.data ?? []).map((h) => [h.id, h]))
   const clusterName = (id: number | null | undefined) =>
-    id == null ? '未分组' : (clusters.data ?? []).find((c) => c.id === id)?.name ?? `集群 ${id}`
+    id == null ? t('common.ungrouped') : (clusters.data ?? []).find((c) => c.id === id)?.name ?? t('monitoring.clusterFallback', { id })
 
   interface Row {
     inst: Instance
@@ -126,9 +128,9 @@ export default function MonitoringPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">监控总览</h1>
+          <h1 className="text-2xl font-bold">{t('nav.monitoring')}</h1>
           <p className="text-sm text-muted-foreground">
-            全部实例健康与流量聚合,10 秒自动刷新;点击实例行下钻单实例监控
+            {t('monitoring.subtitle')}
           </p>
         </div>
         <Button
@@ -142,18 +144,18 @@ export default function MonitoringPage() {
           }}
         >
           <RefreshCw className="mr-1 size-4" />
-          刷新
+          {t('common.refresh')}
         </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <SummaryCard title="实例在线" value={`${online} / ${rows.length}`} />
+        <SummaryCard title={t('monitoring.instancesOnline')} value={`${online} / ${rows.length}`} />
         <SummaryCard
-          title="服务器 UP / DOWN"
-          value={`${fmtNum(allAgg.up)} / ${fmtNum(allAgg.down)}(共 ${allAgg.serverTotal})`}
+          title={t('monitoring.serversUpDown')}
+          value={`${fmtNum(allAgg.up)} / ${fmtNum(allAgg.down)}(${t('monitoring.total', { total: allAgg.serverTotal })})`}
         />
-        <SummaryCard title="请求速率/s(全实例)" value={fmtNum(allAgg.reqRate)} />
-        <SummaryCard title="当前连接(全实例)" value={fmtNum(allAgg.scur)} />
+        <SummaryCard title={t('monitoring.reqRateAll')} value={fmtNum(allAgg.reqRate)} />
+        <SummaryCard title={t('monitoring.curConnAll')} value={fmtNum(allAgg.scur)} />
       </div>
 
       {[...groups.entries()].map(([clusterId, items]) => {
@@ -165,7 +167,7 @@ export default function MonitoringPage() {
               <Activity className="size-4 text-primary" />
               {clusterName(clusterId)}
             </CardTitle>
-            <CardDescription>{items.length} 个实例</CardDescription>
+            <CardDescription>{t('monitoring.instanceCount', { count: items.length })}</CardDescription>
           </CardHeader>
           <CardContent>
             {clusterId != null && vrrp && (
@@ -178,12 +180,12 @@ export default function MonitoringPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>实例</TableHead>
+                  <TableHead>{t('monitoring.instanceHead')}</TableHead>
                   <TableHead>dataplaneapi</TableHead>
-                  <TableHead>服务器 UP / DOWN</TableHead>
-                  <TableHead className="text-right">请求速率/s</TableHead>
-                  <TableHead className="text-right">当前连接</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead>{t('monitoring.serversUpDown')}</TableHead>
+                  <TableHead className="text-right">{t('stats.reqRate')}</TableHead>
+                  <TableHead className="text-right">{t('stats.curConn')}</TableHead>
+                  <TableHead className="text-right">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -202,13 +204,13 @@ export default function MonitoringPage() {
                               'size-2 rounded-full',
                               r.h?.ok ? 'bg-green-600' : 'bg-red-600',
                             )}
-                            aria-label={r.h?.ok ? '在线' : '不可达'}
+                            aria-label={r.h?.ok ? t('common.online') : t('dashboard.unreachable')}
                           />
                           {r.inst.name}
                         </span>
                       </TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">
-                        {r.h?.ok ? (r.h.version || '—') : (r.h?.error ?? '探测中…')}
+                        {r.h?.ok ? (r.h.version || '—') : (r.h?.error ?? t('dashboard.probing'))}
                       </TableCell>
                       <TableCell>
                         {a ? (
@@ -219,7 +221,7 @@ export default function MonitoringPage() {
                           </span>
                         ) : (
                           <span className="text-xs text-muted-foreground">
-                            {r.statsError ? '指标不可用' : '加载中…'}
+                            {r.statsError ? t('stats.metricsUnavailable') : t('common.loading')}
                           </span>
                         )}
                       </TableCell>
@@ -227,7 +229,7 @@ export default function MonitoringPage() {
                       <TableCell className="text-right">{a ? fmtNum(a.scur) : '—'}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="outline" size="sm" asChild>
-                          <a href={`/instances/${r.inst.id}/stats`}>监控</a>
+                          <a href={`/instances/${r.inst.id}/stats`}>{t('instances.monitor')}</a>
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -243,8 +245,8 @@ export default function MonitoringPage() {
       {instances.isError && (
         <Card>
           <CardContent className="pt-6 text-sm text-red-600">
-            实例列表加载失败:
-            {instances.error instanceof ApiError ? instances.error.message : '请求失败'}
+            {t('monitoring.listFailed')}
+            {instances.error instanceof ApiError ? instances.error.message : t('common.requestFailed')}
           </CardContent>
         </Card>
       )}

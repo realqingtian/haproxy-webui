@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import type { ConfigOp } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 export interface DialogProps {
   open: boolean
@@ -28,15 +29,16 @@ export interface DialogProps {
   saving: boolean
 }
 
-function FormFooter({ saving, onClose, submitLabel = '保存', submitDisabled = false }: { saving: boolean; onClose: () => void; submitLabel?: string; submitDisabled?: boolean }) {
+function FormFooter({ saving, onClose, submitLabel, submitDisabled = false }: { saving: boolean; onClose: () => void; submitLabel?: string; submitDisabled?: boolean }) {
+  const { t } = useTranslation()
   return (
     <DialogFooter>
       <Button type="button" variant="outline" onClick={onClose}>
-        取消
+        {t('common.cancel')}
       </Button>
       <Button type="submit" disabled={saving || submitDisabled}>
         {saving && <Loader2 className="mr-1 size-4 animate-spin" />}
-        {submitLabel}
+        {submitLabel ?? t('common.save')}
       </Button>
     </DialogFooter>
   )
@@ -44,6 +46,7 @@ function FormFooter({ saving, onClose, submitLabel = '保存', submitDisabled = 
 
 // ServerDialog 新增/编辑后端服务器
 export function ServerDialog(props: DialogProps & { backend: string; initial?: { name: string; address: string; port: number | null; check: string } }) {
+  const { t } = useTranslation()
   const { open, onClose, onSubmit, saving, backend, initial } = props
   const [name, setName] = useState(initial?.name ?? '')
   const [address, setAddress] = useState(initial?.address ?? '')
@@ -60,25 +63,25 @@ export function ServerDialog(props: DialogProps & { backend: string; initial?: {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial ? '编辑服务器' : '添加服务器'}</DialogTitle>
-          <DialogDescription>backend {backend} 下的服务器定义(持久写入配置文件)</DialogDescription>
+          <DialogTitle>{initial ? t('dlg.editServer') : t('dlg.addServer')}</DialogTitle>
+          <DialogDescription>{t('dlg.serverDesc', { backend })}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="grid gap-2">
-            <Label>名称</Label>
+            <Label>{t('dlg.nameLabel')}</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!!initial} placeholder="web1" />
           </div>
           <div className="grid gap-2">
-            <Label>地址</Label>
+            <Label>{t('dlg.addressLabel')}</Label>
             <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="10.0.0.5" />
           </div>
           <div className="grid gap-2">
-            <Label>端口</Label>
+            <Label>{t('dlg.portLabel')}</Label>
             <Input value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, ''))} placeholder="8080" />
           </div>
           <div className="flex items-center gap-2">
             <Switch checked={check} onCheckedChange={setCheck} />
-            <Label>启用健康检查</Label>
+            <Label>{t('dlg.checkLabel')}</Label>
           </div>
         </div>
         <form
@@ -97,6 +100,7 @@ export function ServerDialog(props: DialogProps & { backend: string; initial?: {
 
 // BackendDialog 新建 backend
 export function BackendDialog(props: DialogProps) {
+  const { t } = useTranslation()
   const { open, onClose, onSubmit, saving } = props
   const [name, setName] = useState('')
   if (!open) return null
@@ -105,11 +109,11 @@ export function BackendDialog(props: DialogProps) {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>新建 backend</DialogTitle>
-          <DialogDescription>创建一个后端分组,之后再向其中添加服务器</DialogDescription>
+          <DialogTitle>{t('dlg.newBackend')}</DialogTitle>
+          <DialogDescription>{t('dlg.backendDesc')}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-2 py-2">
-          <Label>名称</Label>
+          <Label>{t('dlg.nameLabel')}</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="app_pool" />
         </div>
         <form
@@ -130,6 +134,7 @@ export function FrontendDialog(props: DialogProps & {
   initial?: { name: string; defaultBackend: string }
   backendOptions: string[]
 }) {
+  const { t } = useTranslation()
   const { open, onClose, onSubmit, saving, backendOptions, initial } = props
   const [name, setName] = useState(initial?.name ?? '')
   const [defaultBackend, setDefaultBackend] = useState(initial?.defaultBackend ?? '')
@@ -146,21 +151,21 @@ export function FrontendDialog(props: DialogProps & {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial ? '编辑 frontend' : '新建 frontend'}</DialogTitle>
+          <DialogTitle>{initial ? t('dlg.editFrontend') : t('dlg.newFrontend')}</DialogTitle>
           <DialogDescription>
-            {initial ? '修改默认后端' : '创建前端并添加第一个监听(bind)'}
+            {initial ? t('dlg.frontendEditDesc') : t('dlg.frontendNewDesc')}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="grid gap-2">
-            <Label>名称</Label>
+            <Label>{t('dlg.nameLabel')}</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!!initial} placeholder="web_front" />
           </div>
           <div className="grid gap-2">
-            <Label>默认后端(可选)</Label>
+            <Label>{t('dlg.defaultBackendLabel')}</Label>
             <Select value={defaultBackend} onValueChange={setDefaultBackend}>
               <SelectTrigger>
-                <SelectValue placeholder="不指定" />
+                <SelectValue placeholder={t('dlg.unspecified')} />
               </SelectTrigger>
               <SelectContent>
                 {backendOptions.map((b) => (
@@ -175,15 +180,15 @@ export function FrontendDialog(props: DialogProps & {
             <>
               <div className="grid grid-cols-3 gap-2">
                 <div className="grid gap-2">
-                  <Label>bind 名称</Label>
+                  <Label>{t('dlg.bindNameLabel')}</Label>
                   <Input value={bindName} onChange={(e) => setBindName(e.target.value)} />
                 </div>
                 <div className="grid gap-2">
-                  <Label>监听地址</Label>
+                  <Label>{t('dlg.bindAddressLabel')}</Label>
                   <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="*" />
                 </div>
                 <div className="grid gap-2">
-                  <Label>端口</Label>
+                  <Label>{t('dlg.portLabel')}</Label>
                   <Input value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, ''))} placeholder="80" />
                 </div>
               </div>
@@ -225,6 +230,7 @@ export function AclDialog(props: DialogProps & {
   onDeleteAcl: (aclName: string) => void
   loading: boolean
 }) {
+  const { t } = useTranslation()
   const { open, onClose, onSubmit, saving, parentType, parent, acls, onDeleteAcl, loading } = props
   const [aclName, setAclName] = useState('')
   const [criterion, setCriterion] = useState('')
@@ -235,8 +241,8 @@ export function AclDialog(props: DialogProps & {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>ACL 规则 · {parent}</DialogTitle>
-          <DialogDescription>同 acl_name 的多条规则为一组,删除时整组删除</DialogDescription>
+          <DialogTitle>{t('dlg.aclTitle', { parent })}</DialogTitle>
+          <DialogDescription>{t('dlg.aclDesc')}</DialogDescription>
         </DialogHeader>
         <div className="max-h-64 space-y-2 overflow-auto py-2">
           {loading ? (
@@ -244,7 +250,7 @@ export function AclDialog(props: DialogProps & {
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
             </div>
           ) : acls.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">暂无 ACL 规则</p>
+            <p className="py-4 text-center text-sm text-muted-foreground">{t('dlg.noAcl')}</p>
           ) : (
             acls.map((a, i) => (
               <div key={`${a.acl_name}-${i}`} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
@@ -284,15 +290,15 @@ export function AclDialog(props: DialogProps & {
         >
           <div className="grid grid-cols-[1fr_1fr_1.4fr_auto] items-end gap-2 border-t pt-4">
             <div className="grid gap-1">
-              <Label className="text-xs">组名</Label>
+              {t('dlg.aclGroup')}
               <Input value={aclName} onChange={(e) => setAclName(e.target.value)} placeholder="host_ab" />
             </div>
             <div className="grid gap-1">
-              <Label className="text-xs">匹配条件</Label>
+              {t('dlg.aclCriterion')}
               <Input value={criterion} onChange={(e) => setCriterion(e.target.value)} placeholder="hdr(host)" />
             </div>
             <div className="grid gap-1">
-              <Label className="text-xs">匹配值</Label>
+              {t('dlg.aclValue')}
               <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="-i a.com b.com" />
             </div>
             <Button type="submit" size="sm" disabled={saving || !aclName || !criterion || !value}>
@@ -302,7 +308,7 @@ export function AclDialog(props: DialogProps & {
           <DialogFooter>
             {/* type=button:不能随表单提交,否则空字段时会把空操作加入暂存/直接 apply */}
             <Button type="button" variant="outline" onClick={onClose}>
-              关闭
+              {t('dlg.close')}
             </Button>
           </DialogFooter>
         </form>

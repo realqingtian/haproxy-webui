@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { getToken } from '@/lib/api'
+import { useTranslation } from 'react-i18next'
 
 const MAX_LINES = 2000
 
@@ -18,6 +19,7 @@ export function LogsTab({
   sshConfigured: boolean
   logPath?: string
 }) {
+  const { t } = useTranslation()
   const [lines, setLines] = useState<string[]>([])
   const [paused, setPaused] = useState(false)
   const pausedRef = useRef(false)
@@ -70,9 +72,9 @@ export function LogsTab({
             }
           }
         }
-        setError('连接已断开,点击重连')
+        setError(t('logs.disconnected'))
       } catch (e) {
-        if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : '连接中断')
+        if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : t('logs.disconnected'))
       }
     })()
     return () => ctrl.abort()
@@ -89,8 +91,7 @@ export function LogsTab({
     return (
       <Card>
         <CardContent className="pt-6 text-sm text-muted-foreground">
-          实例未配置 SSH:在实例管理中编辑该实例,填写 SSH 用户与凭据(及可选的 haproxy
-          日志路径)后,可在此实时查看节点日志尾部
+          {t('logs.noSshHint')}
         </CardContent>
       </Card>
     )
@@ -105,36 +106,36 @@ export function LogsTab({
       <CardContent className="pt-6 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">
-            tail -f {logPath || '/var/log/haproxy.log'} · {lines.length} 行
+            tail -f {logPath || '/var/log/haproxy.log'} · {t('logs.lineCount', { count: lines.length })}
           </span>
           <div className="ml-auto flex items-center gap-1">
             <Input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="过滤关键字…"
+              placeholder={t('logs.filterPlaceholder')}
               className="h-8 w-44"
             />
             <Button
               variant="outline"
               size="sm"
               onClick={() => setPaused((p) => !p)}
-              aria-label={paused ? '继续' : '暂停'}
+              aria-label={paused ? t('logs.resume') : t('logs.pause')}
             >
               {paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
-              {paused ? '继续' : '暂停'}
+              {paused ? t('logs.resume') : t('logs.pause')}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setLines([])} aria-label="清屏">
+            <Button variant="outline" size="sm" onClick={() => setLines([])} aria-label={t('logs.clearAria')}>
               <Eraser className="size-3.5" />
-              清屏
+              {t('logs.clear')}
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setNonce((n) => n + 1)}
-              aria-label="重连"
+              aria-label={t('logs.reconnectAria')}
             >
               <RotateCcw className="size-3.5" />
-              重连
+              {t('logs.reconnect')}
             </Button>
           </div>
         </div>
@@ -145,7 +146,7 @@ export function LogsTab({
         >
           {shown.length === 0 ? (
             <p className="text-muted-foreground">
-              {lines.length === 0 ? '等待日志…(节点产生新日志时实时显示)' : '无匹配行'}
+              {lines.length === 0 ? t('logs.waiting') : t('logs.noMatch')}
             </p>
           ) : (
             shown.map((l, i) => (

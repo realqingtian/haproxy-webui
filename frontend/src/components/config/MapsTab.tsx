@@ -24,11 +24,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { api, ApiError, canWrite } from '@/lib/api'
+import { useTranslation } from 'react-i18next'
 import type { MapEntryView, MapFileView } from '@/types'
 
 // Runtime maps 页签(v0.10):条目增删改即时生效,force_sync 同步节点文件;
 // 仅被 haproxy.cfg 引用的 map 才生效,未生效文件仅可查看内容。
 export function MapsTab({ instanceId }: { instanceId: string }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const writable = canWrite()
   const [selected, setSelected] = useState<string | null>(null)
@@ -52,7 +54,7 @@ export function MapsTab({ instanceId }: { instanceId: string }) {
     queryClient.invalidateQueries({ queryKey: ['instance-maps', instanceId] })
   }
   const toastErr = (e: unknown) =>
-    toast.error(e instanceof ApiError ? (e.hint ? `${e.message}(${e.hint})` : e.message) : '请求失败')
+    toast.error(e instanceof ApiError ? (e.hint ? `${e.message}(${e.hint})` : e.message) : t('common.requestFailed'))
 
   const addMutation = useMutation({
     mutationFn: (v: { key: string; value: string }) =>
@@ -61,7 +63,7 @@ export function MapsTab({ instanceId }: { instanceId: string }) {
         body: JSON.stringify(v),
       }),
     onSuccess: () => {
-      toast.success('条目已添加(即时生效,已同步节点文件)')
+      toast.success(t('maps.entryAdded'))
       invalidate()
     },
     onError: toastErr,
@@ -73,7 +75,7 @@ export function MapsTab({ instanceId }: { instanceId: string }) {
         body: JSON.stringify({ value: v.value }),
       }),
     onSuccess: () => {
-      toast.success('条目已更新(即时生效,已同步节点文件)')
+      toast.success(t('maps.entryUpdated'))
       setEditing(null)
       invalidate()
     },
@@ -85,7 +87,7 @@ export function MapsTab({ instanceId }: { instanceId: string }) {
         method: 'DELETE',
       }),
     onSuccess: () => {
-      toast.success('条目已删除(即时生效,已同步节点文件)')
+      toast.success(t('maps.entryDeleted'))
       invalidate()
     },
     onError: toastErr,
@@ -118,13 +120,12 @@ export function MapsTab({ instanceId }: { instanceId: string }) {
       <CardContent className="pt-6 space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            HAProxy maps(灰度名单 / 分流表等):仅被配置引用的 map 可编辑条目,
-            编辑即时生效并同步到节点文件
+            {t('maps.hint')}
           </p>
           {writable && (
             <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)}>
               <Upload className="mr-1 size-4" />
-              上传 map 文件
+              {t('maps.upload')}
             </Button>
           )}
         </div>
@@ -132,15 +133,15 @@ export function MapsTab({ instanceId }: { instanceId: string }) {
         {/* map 列表 */}
         {list.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            节点 map 目录为空;上传 map 文件并在配置中引用后即可在此编辑
+            {t('maps.empty')}
           </p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>文件名</TableHead>
+                <TableHead>{t('certs.nameHead')}</TableHead>
                 <TableHead>状态</TableHead>
-                <TableHead>节点路径</TableHead>
+                <TableHead>{t('maps.pathHead')}</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
@@ -150,9 +151,9 @@ export function MapsTab({ instanceId }: { instanceId: string }) {
                   <TableCell className="font-mono text-xs font-medium">{m.name}</TableCell>
                   <TableCell>
                     {m.active ? (
-                      <Badge className="bg-green-600">生效中</Badge>
+                      <Badge className="bg-green-600">{t('maps.active')}</Badge>
                     ) : (
-                      <Badge variant="secondary">未被配置引用</Badge>
+                      <Badge variant="secondary">{t('maps.inactive')}</Badge>
                     )}
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{m.file}</TableCell>
@@ -163,13 +164,13 @@ export function MapsTab({ instanceId }: { instanceId: string }) {
                         size="sm"
                         onClick={() => setSelected(selected === m.name ? null : m.name)}
                       >
-                        {selected === m.name ? '收起条目' : '编辑条目'}
+                        {selected === m.name ? t('maps.collapseEntries') : t('maps.editEntries')}
                       </Button>
                     )}
                     <Button
                       variant="outline"
                       size="sm"
-                      aria-label={`查看 ${m.name} 内容`}
+                      aria-label={t('certs.viewAria', { name: m.name })}
                       onClick={async () => {
                         try {
                           setContentOf(m.name)
@@ -247,7 +248,7 @@ export function MapsTab({ instanceId }: { instanceId: string }) {
                 {(entries.data ?? []).length === 0 && (
                   <TableRow>
                     <TableCell colSpan={3} className="text-sm text-muted-foreground">
-                      暂无条目
+                      {t('maps.noEntries')}
                     </TableCell>
                   </TableRow>
                 )}
@@ -260,9 +261,9 @@ export function MapsTab({ instanceId }: { instanceId: string }) {
         <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>更新条目</DialogTitle>
+              <DialogTitle>{t('maps.updateEntry')}</DialogTitle>
               <DialogDescription>
-                key <span className="font-mono">{editing?.key}</span> 的值将即时生效并同步节点文件
+                {t('maps.updateDesc', { key: editing?.key ?? '' })}
               </DialogDescription>
             </DialogHeader>
             <EditEntryBody
@@ -278,8 +279,8 @@ export function MapsTab({ instanceId }: { instanceId: string }) {
         <Dialog open={!!contentOf} onOpenChange={(o) => !o && setContentOf(null)}>
           <DialogContent className="max-w-xl">
             <DialogHeader>
-              <DialogTitle>map 文件内容{contentOf ? ` · ${contentOf}` : ''}</DialogTitle>
-              <DialogDescription>节点上的文件原文</DialogDescription>
+              <DialogTitle>{t('maps.contentTitle', { name: contentOf ?? '' })}</DialogTitle>
+              <DialogDescription>{t('maps.contentDesc')}</DialogDescription>
             </DialogHeader>
             <pre className="max-h-[50vh] overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
               {content || '(空)'}
@@ -299,6 +300,7 @@ export function MapsTab({ instanceId }: { instanceId: string }) {
 }
 
 function AddEntryRow(props: { pending: boolean; onAdd: (key: string, value: string) => void }) {
+  const { t } = useTranslation()
   const [key, setKey] = useState('')
   const [value, setValue] = useState('')
   const submit = () => {
@@ -332,7 +334,7 @@ function AddEntryRow(props: { pending: boolean; onAdd: (key: string, value: stri
         <Plus className="mr-1 size-4" />
         添加
       </Button>
-      <span className="text-xs text-muted-foreground">不允许空白与引号字符</span>
+      <span className="text-xs text-muted-foreground">{t('maps.tokenHint')}</span>
     </div>
   )
 }
@@ -373,6 +375,7 @@ function UploadMapDialog(props: {
   onClose: () => void
   onDone: () => void
 }) {
+  const { t } = useTranslation()
   const [name, setName] = useState('')
   const [content, setContent] = useState('')
   const upload = useMutation({
@@ -382,14 +385,14 @@ function UploadMapDialog(props: {
         body: JSON.stringify({ name: name.trim(), content }),
       }),
     onSuccess: () => {
-      toast.success('map 文件已上传;在 haproxy.cfg 引用并 reload 后生效')
+      toast.success(t('maps.uploaded'))
       setName('')
       setContent('')
       props.onClose()
       props.onDone()
     },
     onError: (e) =>
-      toast.error(e instanceof ApiError ? (e.hint ? `${e.message}(${e.hint})` : e.message) : '请求失败'),
+      toast.error(e instanceof ApiError ? (e.hint ? `${e.message}(${e.hint})` : e.message) : t('common.requestFailed')),
   })
   return (
     <Dialog
@@ -400,12 +403,12 @@ function UploadMapDialog(props: {
     >
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>上传 map 文件</DialogTitle>
-          <DialogDescription>每行「key value」,# 注释;上传后需配置引用并 reload 才生效</DialogDescription>
+          <DialogTitle>{t('maps.uploadTitle')}</DialogTitle>
+          <DialogDescription>{t('maps.uploadDesc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="grid gap-1.5">
-            <Label htmlFor="map-upload-name">文件名</Label>
+            <Label htmlFor="map-upload-name">{t('maps.nameLabel')}</Label>
             <Input
               id="map-upload-name"
               value={name}
@@ -415,7 +418,7 @@ function UploadMapDialog(props: {
             />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="map-upload-content">内容</Label>
+            <Label htmlFor="map-upload-content">{t('maps.contentLabel')}</Label>
             <textarea
               id="map-upload-content"
               value={content}
@@ -434,7 +437,7 @@ function UploadMapDialog(props: {
             onClick={() => upload.mutate()}
           >
             <Upload className="mr-1 size-4" />
-            {upload.isPending ? '上传中…' : '上传'}
+            {upload.isPending ? t('common.loading') : t('maps.upload')}
           </Button>
         </DialogFooter>
       </DialogContent>

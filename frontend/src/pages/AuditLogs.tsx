@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Download, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -25,22 +26,22 @@ import { api, ApiError, apiDownload } from '@/lib/api'
 import type { AuditLog } from '@/types'
 
 const ACTION_LABELS: Record<string, string> = {
-  'login.ok': '登录成功',
-  'login.fail': '登录失败',
-  'instance.create': '添加实例',
-  'instance.update': '修改实例',
-  'instance.delete': '删除实例',
-  'server.state': '服务器上下线',
-  'server.weight': '调整权重',
-  'config.apply': '配置变更',
-  'config.rollback': '配置回滚',
-  'config.sync': '配置同步',
-  'user.create': '创建用户',
-  'user.update': '修改用户',
-  'user.delete': '删除用户',
-  'user.password': '修改密码',
-  'user.force_logout': '强制下线',
-  'reload.failed': 'reload 失败',
+  'login.ok': 'audit.loginOk',
+  'login.fail': 'audit.loginFail',
+  'instance.create': 'audit.instanceCreate',
+  'instance.update': 'audit.instanceUpdate',
+  'instance.delete': 'audit.instanceDelete',
+  'server.state': 'audit.serverState',
+  'server.weight': 'audit.serverWeight',
+  'config.apply': 'audit.configApply',
+  'config.rollback': 'audit.configRollback',
+  'config.sync': 'audit.configSync',
+  'user.create': 'audit.userCreate',
+  'user.update': 'audit.userUpdate',
+  'user.delete': 'audit.userDelete',
+  'user.password': 'audit.userPassword',
+  'user.force_logout': 'audit.userForceLogout',
+  'reload.failed': 'audit.reloadFailed',
 }
 
 // 组装过滤查询串(列表与 CSV 导出共用)
@@ -55,6 +56,7 @@ function filterQuery(action: string, username: string, from: string, to: string)
 }
 
 export default function AuditLogsPage() {
+  const { t } = useTranslation()
   const [action, setAction] = useState('')
   const [username, setUsername] = useState('')
   const [from, setFrom] = useState('')
@@ -77,7 +79,7 @@ export default function AuditLogsPage() {
         `audit-logs-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`,
       )
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : '导出失败')
+      toast.error(e instanceof ApiError ? e.message : t('audit.exportFailed'))
     } finally {
       setExporting(false)
     }
@@ -95,16 +97,16 @@ export default function AuditLogsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">审计日志</h1>
-          <p className="text-sm text-muted-foreground">最近 200 条,每 30 秒自动刷新</p>
+          <h1 className="text-2xl font-bold">{t('nav.audit')}</h1>
+          <p className="text-sm text-muted-foreground">{t('audit.subtitle')}</p>
         </div>
         <Button variant="outline" size="sm" disabled={exporting} onClick={exportCsv}>
           {exporting ? <Loader2 className="mr-1 size-4 animate-spin" /> : <Download className="mr-1 size-4" />}
-          导出 CSV
+          {t('audit.exportCsv')}
         </Button>
         <Button variant="outline" size="sm" onClick={() => logs.refetch()}>
           <RefreshCw className="mr-1 size-4" />
-          刷新
+          {t('common.refresh')}
         </Button>
       </div>
 
@@ -116,10 +118,10 @@ export default function AuditLogsPage() {
               onValueChange={(v) => setAction(v === 'all' ? '' : v)}
             >
               <SelectTrigger className="w-44">
-                <SelectValue placeholder="全部操作类型" />
+                <SelectValue placeholder={t('audit.allActions')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">全部操作类型</SelectItem>
+                <SelectItem value="all">{t('audit.allActions')}</SelectItem>
                 {Object.entries(ACTION_LABELS).map(([k, label]) => (
                   <SelectItem key={k} value={k}>
                     {label}
@@ -129,7 +131,7 @@ export default function AuditLogsPage() {
             </Select>
             <Input
               className="w-44"
-              placeholder="按用户名过滤"
+              placeholder={t('audit.usernameFilter')}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
@@ -137,15 +139,15 @@ export default function AuditLogsPage() {
               <Input
                 type="datetime-local"
                 className="w-56"
-                aria-label="开始时间"
+                aria-label={t('audit.startTime')}
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
               />
-              <span className="text-sm text-muted-foreground">至</span>
+              <span className="text-sm text-muted-foreground">{t('audit.to')}</span>
               <Input
                 type="datetime-local"
                 className="w-56"
-                aria-label="结束时间"
+                aria-label={t('audit.endTime')}
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
               />
@@ -158,7 +160,7 @@ export default function AuditLogsPage() {
                     setTo('')
                   }}
                 >
-                  清除
+                  {t('audit.clearFilter')}
                 </Button>
               )}
             </div>
@@ -170,20 +172,20 @@ export default function AuditLogsPage() {
             </div>
           ) : logs.isError ? (
             <p className="py-8 text-center text-sm text-red-600">
-              {logs.error instanceof ApiError ? logs.error.message : '加载失败'}
+              {logs.error instanceof ApiError ? logs.error.message : t('common.loading')}
             </p>
           ) : list.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">暂无日志</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">{t('audit.empty')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>时间</TableHead>
-                  <TableHead>用户</TableHead>
-                  <TableHead>操作</TableHead>
-                  <TableHead>对象</TableHead>
-                  <TableHead>详情</TableHead>
-                  <TableHead>来源 IP</TableHead>
+                  <TableHead>{t('revisions.timeHead')}</TableHead>
+                  <TableHead>{t('audit.userHead')}</TableHead>
+                  <TableHead>{t('audit.actionHead')}</TableHead>
+                  <TableHead>{t('audit.targetHead')}</TableHead>
+                  <TableHead>{t('audit.detailHead')}</TableHead>
+                  <TableHead>{t('audit.ipHead')}</TableHead>
                 </TableRow>
               </TableHeader>
                 <TableBody>

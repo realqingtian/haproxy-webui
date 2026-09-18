@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 // 客户端分页控件:首页 / 末页 / 当前页 ±1,其余折叠为省略号。pageCount <= 1 时不渲染。
@@ -19,19 +20,20 @@ function pageItems(page: number, pageCount: number): number[] {
 }
 
 export function Pagination({ page, pageCount, onChange, className }: PaginationProps) {
+  const { t } = useTranslation()
   if (pageCount <= 1) return null
   const items = pageItems(page, pageCount)
   return (
     <div className={cn('flex items-center justify-end gap-1 pt-2', className)}>
       <span className="mr-2 text-xs text-muted-foreground">
-        第 {page} / {pageCount} 页
+        {t('common.pageOf', { page, pageCount })}
       </span>
       <Button
         variant="outline"
         size="icon"
         disabled={page <= 1}
         onClick={() => onChange(page - 1)}
-        aria-label="上一页"
+        aria-label={t('common.prevPage')}
       >
         <ChevronLeft className="size-4" />
       </Button>
@@ -57,7 +59,7 @@ export function Pagination({ page, pageCount, onChange, className }: PaginationP
         size="icon"
         disabled={page >= pageCount}
         onClick={() => onChange(page + 1)}
-        aria-label="下一页"
+        aria-label={t('common.nextPage')}
       >
         <ChevronRight className="size-4" />
       </Button>

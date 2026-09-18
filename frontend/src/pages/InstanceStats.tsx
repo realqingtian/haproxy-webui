@@ -23,6 +23,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { api, ApiError, getToken } from '@/lib/api'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { fmtBytes, fmtNum } from '@/lib/format'
 import type { Instance, MetricsProbeResult, StatItem } from '@/types'
@@ -95,6 +96,7 @@ function useStatsStream(id: string | undefined): {
 }
 
 export default function InstanceStatsPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const [serverPage, setServerPage] = useState(1)
   const { live, mode } = useStatsStream(id)
@@ -116,7 +118,7 @@ export default function InstanceStatsPage() {
     staleTime: 60_000,
   })
 
-  const instanceName = instances.data?.find((i) => String(i.id) === id)?.name ?? `实例 ${id}`
+  const instanceName = instances.data?.find((i) => String(i.id) === id)?.name ?? t('config.instanceFallback', { id })
   const list = mode === 'polling' ? (stats.data ?? []) : (live ?? [])
   const frontends = list.filter((s) => s.type === 'frontend')
   const backends = list.filter((s) => s.type === 'backend')
@@ -147,23 +149,23 @@ export default function InstanceStatsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{instanceName} · 监控</h1>
+          <h1 className="text-2xl font-bold">{t('stats.title', { name: instanceName })}</h1>
           <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
             {mode === 'live' ? (
               <>
                 <span className="size-1.5 animate-pulse rounded-full bg-green-600" />
-                实时推送中(SSE,5s)
+                {t('stats.live')}
               </>
             ) : mode === 'polling' ? (
-              '实时连接失败,已回落 10s 轮询'
+              t('stats.fallbackPolling')
             ) : (
-              '正在建立实时连接…'
+              t('stats.connecting')
             )}
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" asChild>
-            <Link to={`/instances/${id}/config`}>返回配置</Link>
+            <Link to={`/instances/${id}/config`}>{t('stats.backToConfig')}</Link>
           </Button>
           <Button
             variant="outline"
@@ -173,7 +175,7 @@ export default function InstanceStatsPage() {
             }}
           >
             <RefreshCw className="mr-1 size-4" />
-            刷新
+            {t('common.refresh')}
           </Button>
         </div>
       </div>
@@ -185,17 +187,17 @@ export default function InstanceStatsPage() {
       ) : mode === 'polling' && stats.isError ? (
         <Card>
           <CardContent className="pt-6 text-sm text-red-600">
-            无法获取监控数据:{stats.error instanceof ApiError ? stats.error.message : '请求失败'}
+            {t('stats.loadFailed', { msg: stats.error instanceof ApiError ? stats.error.message : t('common.requestFailed') })}
           </CardContent>
         </Card>
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-5">
-            <SummaryCard title="当前连接" value={fmtNum(totalCur)} />
-            <SummaryCard title="请求速率/s" value={fmtNum(totalReqRate)} />
-            <SummaryCard title="累计会话" value={fmtNum(totalSessions)} />
-            <SummaryCard title="入流量" value={fmtBytes(totalBin)} />
-            <SummaryCard title="出流量" value={fmtBytes(totalBout)} />
+            <SummaryCard title={t('stats.curConn')} value={fmtNum(totalCur)} />
+            <SummaryCard title={t('stats.reqRate')} value={fmtNum(totalReqRate)} />
+            <SummaryCard title={t('stats.totalSessions')} value={fmtNum(totalSessions)} />
+            <SummaryCard title={t('stats.bin')} value={fmtBytes(totalBin)} />
+            <SummaryCard title={t('stats.bout')} value={fmtBytes(totalBout)} />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -205,20 +207,20 @@ export default function InstanceStatsPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">前端</CardTitle>
-              <CardDescription>frontend 对象实时指标</CardDescription>
+              <CardTitle className="text-base">{t('stats.frontends')}</CardTitle>
+              <CardDescription>{t('stats.frontendsDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>名称</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead className="text-right">当前连接</TableHead>
-                    <TableHead className="text-right">请求速率/s</TableHead>
-                    <TableHead className="text-right">会话数</TableHead>
-                    <TableHead className="text-right">入/出流量</TableHead>
-                    <TableHead className="text-right">4xx / 5xx</TableHead>
+                    <TableHead>{t('stats.nameHead')}</TableHead>
+                    <TableHead>{t('stats.statusHead')}</TableHead>
+                    <TableHead className="text-right">{t('stats.curConn')}</TableHead>
+                    <TableHead className="text-right">{t('stats.reqRate')}</TableHead>
+                    <TableHead className="text-right">{t('stats.sessionsHead')}</TableHead>
+                    <TableHead className="text-right">{t('stats.trafficHead')}</TableHead>
+                    <TableHead className="text-right">{t('stats.httpErrHead')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -246,19 +248,19 @@ export default function InstanceStatsPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">后端</CardTitle>
-              <CardDescription>backend 对象实时指标</CardDescription>
+              <CardTitle className="text-base">{t('stats.backends')}</CardTitle>
+              <CardDescription>{t('stats.backendsDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>名称</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead className="text-right">当前连接</TableHead>
-                    <TableHead className="text-right">请求速率/s</TableHead>
-                    <TableHead className="text-right">排队</TableHead>
-                    <TableHead className="text-right">2xx / 4xx / 5xx</TableHead>
+                    <TableHead>{t('stats.nameHead')}</TableHead>
+                    <TableHead>{t('stats.statusHead')}</TableHead>
+                    <TableHead className="text-right">{t('stats.curConn')}</TableHead>
+                    <TableHead className="text-right">{t('stats.reqRate')}</TableHead>
+                    <TableHead className="text-right">{t('stats.queueHead')}</TableHead>
+                    <TableHead className="text-right">{t('stats.httpCodesHead')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -284,18 +286,18 @@ export default function InstanceStatsPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">服务器</CardTitle>
-              <CardDescription>各 backend 下的 server 健康与检查详情</CardDescription>
+              <CardTitle className="text-base">{t('stats.servers')}</CardTitle>
+              <CardDescription>{t('stats.serversDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>后端 / 服务器</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>地址</TableHead>
-                    <TableHead className="text-right">权重</TableHead>
-                    <TableHead>检查结果</TableHead>
+                    <TableHead>{t('stats.backendServerHead')}</TableHead>
+                    <TableHead>{t('stats.statusHead')}</TableHead>
+                    <TableHead>{t('config.addressHead')}</TableHead>
+                    <TableHead className="text-right">{t('config.weightHead')}</TableHead>
+                    <TableHead>{t('stats.checkResultHead')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -332,22 +334,23 @@ export default function InstanceStatsPage() {
 
 // MetricsProbeCard 展示节点 Prometheus /metrics 探测结果,未接入时给接入指引。
 function MetricsProbeCard({ probe }: { probe: UseQueryResult<MetricsProbeResult, Error> }) {
+  const { t } = useTranslation()
   const Badge = probe.isLoading ? (
     <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
       <Loader2 className="size-3.5 animate-spin" />
-      正在探测…
+      {t('stats.probing')}
     </span>
   ) : probe.isError ? (
-    <span className="inline-flex items-center gap-1.5 text-sm text-red-600">探测失败</span>
+    <span className="inline-flex items-center gap-1.5 text-sm text-red-600">{t('stats.probeFailed')}</span>
   ) : probe.data?.ok ? (
     <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-600">
       <span className="size-2 rounded-full bg-green-600" />
-      Prometheus metrics 可访问
+      {t('stats.probeOk')}
     </span>
   ) : (
     <span className="inline-flex items-center gap-1.5 text-sm font-medium text-yellow-600">
       <span className="size-2 rounded-full bg-yellow-600" />
-      未接入
+      {t('stats.notIntegrated')}
     </span>
   )
 
@@ -355,18 +358,18 @@ function MetricsProbeCard({ probe }: { probe: UseQueryResult<MetricsProbeResult,
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between text-base">
-          Prometheus 探测
+          {t('stats.probeTitle')}
           <Button
             variant="ghost"
             size="sm"
-            aria-label="重新探测 metrics"
+            aria-label={t('stats.reprobeAria')}
             disabled={probe.isFetching}
             onClick={() => probe.refetch()}
           >
             <RefreshCw className={cn('size-4', probe.isFetching && 'animate-spin')} />
           </Button>
         </CardTitle>
-        <CardDescription>检查节点 8404 /metrics 是否可访问(结果缓存 1 分钟)</CardDescription>
+        <CardDescription>{t('stats.probeDesc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-1">
         {Badge}

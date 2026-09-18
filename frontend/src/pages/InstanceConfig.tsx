@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { ClipboardList, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -43,9 +44,9 @@ import { LogsTab } from '@/components/config/LogsTab'
 import { StagingDialog, type StagedItem } from '@/components/config/StagingDialog'
 
 const ADMIN_STATE_LABELS: Record<AdminState, string> = {
-  ready: '上线',
-  drain: '排空',
-  maint: '维护',
+  ready: 'config.stateReady',
+  drain: 'config.stateDrain',
+  maint: 'config.stateMaint',
 }
 
 interface ServerDialogState {
@@ -55,6 +56,7 @@ interface ServerDialogState {
 }
 
 export default function InstanceConfigPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const writable = canWrite()
@@ -103,7 +105,7 @@ export default function InstanceConfigPage() {
         body: JSON.stringify({ ops }),
       }),
     onSuccess: (r) => {
-      toast.success(`配置已保存并触发 reload${r.reloadId ? `(${r.reloadId})` : ''}`)
+      toast.success(t('config.saved', { suffix: r.reloadId ? `(${r.reloadId})` : '' }))
       invalidateAll()
       setStaged([])
       setStagingOpen(false)
@@ -113,14 +115,14 @@ export default function InstanceConfigPage() {
       setAclDialog(null)
       setTemplateOpen(false)
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
   // 所有编辑操作先进入待提交清单,从清单一次事务批量提交(只触发一次 reload)
   const addStaged = (ops: ConfigOp[]) => {
     const items = ops.map((op) => ({ key: ++keySeq.current, op }))
     setStaged((prev) => [...prev, ...items])
-    toast.success(`已加入待提交清单,当前共 ${staged.length + items.length} 条`)
+    toast.success(t('config.stagedAdded', { count: staged.length + items.length }))
     setServerDialog(null)
     setBackendDialogOpen(false)
     setFrontendDialog(null)
@@ -135,13 +137,13 @@ export default function InstanceConfigPage() {
         body: JSON.stringify({ state: v.state }),
       }),
     onSuccess: (_d, v) => {
-      toast.success(`${v.backend}/${v.server} 已切换为「${ADMIN_STATE_LABELS[v.state]}」(运行时,重启后失效)`)
+      toast.success(t('config.stateChanged', { target: `${v.backend}/${v.server}`, state: t(ADMIN_STATE_LABELS[v.state]) }))
       queryClient.invalidateQueries({ queryKey: ['instance-config', id] })
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
-  const instanceName = instances.data?.find((i) => String(i.id) === id)?.name ?? `实例 ${id}`
+  const instanceName = instances.data?.find((i) => String(i.id) === id)?.name ?? t('config.instanceFallback', { id })
   const backendNames = (config.data?.backends ?? []).map((b) => b.name)
 
   // 配置搜索(大小写不敏感):backend 卡片按名称或其服务器名称/地址过滤(仅保留命中的服务器行),
@@ -175,10 +177,9 @@ export default function InstanceConfigPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{instanceName} · 配置管理</h1>
+          <h1 className="text-2xl font-bold">{t('config.title', { name: instanceName })}</h1>
           <p className="text-sm text-muted-foreground">
-            编辑先进入待提交清单,可跨多个对话框累积;提交时在单个事务内应用——校验通过只触发一次优雅
-            reload,任一步失败整体回滚,每次提交自动记录版本快照
+            {t('config.subtitle')}
           </p>
         </div>
         <div className="flex gap-2">
@@ -190,7 +191,7 @@ export default function InstanceConfigPage() {
               onClick={() => setStagingOpen(true)}
             >
               <ClipboardList className="mr-1 size-4" />
-              待提交{staged.length > 0 ? `(${staged.length})` : ''}
+              {t('config.staged', { suffix: staged.length > 0 ? `(${staged.length})` : '' })}
             </Button>
           )}
           <Button
@@ -202,7 +203,7 @@ export default function InstanceConfigPage() {
             }}
           >
             <RefreshCw className="mr-1 size-4" />
-            刷新
+            {t('common.refresh')}
           </Button>
         </div>
       </div>
@@ -214,19 +215,19 @@ export default function InstanceConfigPage() {
       ) : config.isError ? (
         <Card>
           <CardContent className="pt-6 text-sm text-red-600">
-            无法获取配置:{config.error instanceof ApiError ? config.error.message : '请求失败'}
+            {t('config.loadFailed', { msg: config.error instanceof ApiError ? config.error.message : t('common.requestFailed') })}
           </CardContent>
         </Card>
       ) : (
         <Tabs defaultValue="backends">
           <TabsList>
-            <TabsTrigger value="backends">后端与服务器</TabsTrigger>
-            <TabsTrigger value="frontends">前端</TabsTrigger>
-            <TabsTrigger value="certs">证书</TabsTrigger>
-            <TabsTrigger value="maps">Maps</TabsTrigger>
-            <TabsTrigger value="logs">日志</TabsTrigger>
-            <TabsTrigger value="revisions">版本历史</TabsTrigger>
-            <TabsTrigger value="raw">原始配置</TabsTrigger>
+            <TabsTrigger value="backends">{t('config.tabBackends')}</TabsTrigger>
+            <TabsTrigger value="frontends">{t('config.tabFrontends')}</TabsTrigger>
+            <TabsTrigger value="certs">{t('config.tabCerts')}</TabsTrigger>
+            <TabsTrigger value="maps">{t('config.tabMaps')}</TabsTrigger>
+            <TabsTrigger value="logs">{t('config.tabLogs')}</TabsTrigger>
+            <TabsTrigger value="revisions">{t('config.tabRevisions')}</TabsTrigger>
+            <TabsTrigger value="raw">{t('config.tabRaw')}</TabsTrigger>
           </TabsList>
 
           {/* ---- 配置搜索 ---- */}
@@ -238,7 +239,7 @@ export default function InstanceConfigPage() {
               onKeyDown={(e) => {
                 if (e.key === 'Escape') setSearch('')
               }}
-              placeholder="搜索 backend / frontend / server,原始配置中定位并跳转"
+              placeholder={t('config.searchPlaceholder')}
               className="pl-8 pr-8"
             />
             {search && (
@@ -259,18 +260,18 @@ export default function InstanceConfigPage() {
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setTemplateOpen(true)}>
                   <Plus className="mr-1 size-4" />
-                  从模板创建
+                  {t('config.fromTemplate')}
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setBackendDialogOpen(true)}>
                   <Plus className="mr-1 size-4" />
-                  新建 backend
+                  {t('config.newBackend')}
                 </Button>
               </div>
             )}
             {q && visibleBackends.length === 0 ? (
               <Card>
                 <CardContent className="pt-6 text-sm text-muted-foreground">
-                  无匹配「{search.trim()}」的 backend 或服务器
+                  {t('config.noBackendMatch', { q: search.trim() })}
                 </CardContent>
               </Card>
             ) : (
@@ -286,7 +287,7 @@ export default function InstanceConfigPage() {
                         onClick={() => setServerDialog({ mode: 'create', backend: b.name })}
                       >
                         <Plus className="mr-1 size-3.5" />
-                        添加服务器
+                        {t('config.addServer')}
                       </Button>
                       <Button
                         variant="outline"
@@ -301,18 +302,18 @@ export default function InstanceConfigPage() {
                 </CardHeader>
                 <CardContent>
                   {b.servers.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">无服务器</p>
+                    <p className="text-sm text-muted-foreground">{t('config.noServers')}</p>
                   ) : (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>服务器</TableHead>
-                          <TableHead>地址</TableHead>
-                          <TableHead>健康检查</TableHead>
-                          <TableHead>运行状态</TableHead>
-                          <TableHead>管理状态</TableHead>
-                          <TableHead>权重</TableHead>
-                          {writable && <TableHead className="text-right">操作</TableHead>}
+                          <TableHead>{t('config.serverHead')}</TableHead>
+                          <TableHead>{t('config.addressHead')}</TableHead>
+                          <TableHead>{t('config.checkHead')}</TableHead>
+                          <TableHead>{t('config.runStateHead')}</TableHead>
+                          <TableHead>{t('config.adminStateHead')}</TableHead>
+                          <TableHead>{t('config.weightHead')}</TableHead>
+                          {writable && <TableHead className="text-right">{t('common.actions')}</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -349,11 +350,11 @@ export default function InstanceConfigPage() {
           <TabsContent value="frontends">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <CardTitle className="text-base">frontend 列表</CardTitle>
+                <CardTitle className="text-base">{t('config.frontendList')}</CardTitle>
                 {writable && (
                   <Button variant="outline" size="sm" onClick={() => setFrontendDialog({ mode: 'create' })}>
                     <Plus className="mr-1 size-4" />
-                    新建 frontend
+                    {t('config.newFrontend')}
                   </Button>
                 )}
               </CardHeader>
@@ -362,16 +363,16 @@ export default function InstanceConfigPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>frontend</TableHead>
-                      <TableHead>默认后端</TableHead>
-                      <TableHead>监听</TableHead>
-                      {writable && <TableHead className="text-right">操作</TableHead>}
+                      <TableHead>{t('config.defaultBackendHead')}</TableHead>
+                      <TableHead>{t('config.bindHead')}</TableHead>
+                      {writable && <TableHead className="text-right">{t('common.actions')}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {visibleFrontends.length === 0 && q ? (
                       <TableRow>
                         <TableCell colSpan={writable ? 4 : 3} className="text-sm text-muted-foreground">
-                          无匹配「{search.trim()}」的 frontend
+                          {t('config.noFrontendMatch', { q: search.trim() })}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -401,7 +402,7 @@ export default function InstanceConfigPage() {
                               }
                             >
                               <Pencil className="mr-1 size-3.5" />
-                              编辑
+                              {t('common.edit')}
                             </Button>
                             <Button
                               variant="outline"
@@ -458,12 +459,12 @@ export default function InstanceConfigPage() {
             <Card>
               <CardContent className="pt-6">
                 {raw.isFetching && !raw.data ? (
-                  <div className="py-10 text-center text-sm text-muted-foreground">加载中…</div>
+                  <div className="py-10 text-center text-sm text-muted-foreground">{t('common.loading')}</div>
                 ) : raw.data ? (
                   <RawConfigView text={raw.data} query={search} />
                 ) : (
                   <div className="py-10 text-center text-sm text-muted-foreground">
-                    无法获取原始配置
+                    {t('config.rawUnavailable')}
                   </div>
                 )}
               </CardContent>
@@ -560,6 +561,7 @@ function ServerRow(props: {
   onEdit: () => void
   onDelete: () => void
 }) {
+  const { t } = useTranslation()
   const { server: s, writable, pending, onStateChange } = props
   return (
     <TableRow>
@@ -569,9 +571,9 @@ function ServerRow(props: {
       </TableCell>
       <TableCell>
         {s.check === 'enabled' ? (
-          <Badge variant="outline">开启</Badge>
+          <Badge variant="outline">{t('config.checkOn')}</Badge>
         ) : (
-          <Badge variant="secondary">关闭</Badge>
+          <Badge variant="secondary">{t('config.checkOff')}</Badge>
         )}
       </TableCell>
       <TableCell>
@@ -590,7 +592,7 @@ function ServerRow(props: {
             <SelectContent>
               {(Object.keys(ADMIN_STATE_LABELS) as AdminState[]).map((st) => (
                 <SelectItem key={st} value={st}>
-                  {ADMIN_STATE_LABELS[st]}
+                  {t(ADMIN_STATE_LABELS[st])}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -620,16 +622,18 @@ function ServerRow(props: {
 }
 
 function OperationalBadge({ state }: { state: string }) {
+  const { t } = useTranslation()
   if (state === 'up') return <Badge className="bg-green-600">UP</Badge>
   if (state === 'down') return <Badge variant="destructive">DOWN</Badge>
-  if (state === 'no check') return <Badge variant="secondary">无检查</Badge>
+  if (state === 'no check') return <Badge variant="secondary">{t('config.noCheck')}</Badge>
   return <Badge variant="outline">{state || '—'}</Badge>
 }
 
 function AdminBadge({ state }: { state: string }) {
-  if (state === 'ready') return <Badge variant="outline">上线</Badge>
-  if (state === 'drain') return <Badge className="bg-yellow-600">排空</Badge>
-  if (state === 'maint') return <Badge variant="secondary">维护</Badge>
+  const { t } = useTranslation()
+  if (state === 'ready') return <Badge variant="outline">{t('config.stateReady')}</Badge>
+  if (state === 'drain') return <Badge className="bg-yellow-600">{t('config.stateDrain')}</Badge>
+  if (state === 'maint') return <Badge variant="secondary">{t('config.stateMaint')}</Badge>
   return <Badge variant="outline">{state}</Badge>
 }
 

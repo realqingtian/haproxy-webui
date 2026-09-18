@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Loader2, Pencil, Plus, Trash2, Waypoints, Activity, PlugZap } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -73,6 +74,7 @@ const EMPTY_FORM: InstanceForm = {
 }
 
 export default function InstancesPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const writable = canWrite()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -96,12 +98,12 @@ export default function InstancesPage() {
     mutationFn: (id: number) => api<InstanceTestResult>(`/api/instances/${id}/test`),
     onSuccess: (r) => {
       if (r.ok) {
-        toast.success(`连接成功:dataplaneapi ${r.dataplaneapi}`)
+        toast.success(t('instances.testOk', { version: r.dataplaneapi }))
       } else {
-        toast.error(`连接失败:${r.error}`)
+        toast.error(t('instances.testFailed', { error: r.error }))
       }
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
   const saveMutation = useMutation({
@@ -128,45 +130,45 @@ export default function InstancesPage() {
         : api<Instance>('/api/instances', { method: 'POST', body })
     },
     onSuccess: (_d, v) => {
-      toast.success(v.id ? '实例已更新' : '实例已添加')
+      toast.success(v.id ? t('instances.updated') : t('instances.added'))
       queryClient.invalidateQueries({ queryKey: ['instances'] })
       queryClient.invalidateQueries({ queryKey: ['instances-health'] })
       setDialogOpen(false)
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api(`/api/instances/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      toast.success('实例已删除')
+      toast.success(t('instances.deleted'))
       queryClient.invalidateQueries({ queryKey: ['instances'] })
       queryClient.invalidateQueries({ queryKey: ['instances-health'] })
       setDeleting(null)
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
   const clusterCreateMutation = useMutation({
     mutationFn: () => api('/api/clusters', { method: 'POST', body: JSON.stringify(clusterForm) }),
     onSuccess: () => {
-      toast.success('集群已创建')
+      toast.success(t('instances.clusterCreated'))
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
       setClusterDialogOpen(false)
       setClusterForm({ name: '', vip: '' })
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
   const clusterDeleteMutation = useMutation({
     mutationFn: (id: number) => api(`/api/clusters/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      toast.success('集群已删除(组内实例已解绑)')
+      toast.success(t('instances.clusterDeleted'))
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
       queryClient.invalidateQueries({ queryKey: ['instances'] })
       setDeletingCluster(null)
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
   function openCreate() {
@@ -206,13 +208,13 @@ export default function InstancesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">HAProxy 实例</h1>
-          <p className="text-sm text-muted-foreground">每台受管节点对应一个 dataplaneapi 端点</p>
+          <h1 className="text-2xl font-bold">{t('instances.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('instances.subtitle')}</p>
         </div>
         {writable && (
           <Button onClick={openCreate}>
             <Plus className="mr-1 size-4" />
-            添加实例
+            {t('instances.add')}
           </Button>
         )}
       </div>
@@ -222,9 +224,9 @@ export default function InstancesPage() {
         <CardContent className="pt-6 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-semibold">集群分组</h2>
+              <h2 className="text-sm font-semibold">{t('instances.clusters')}</h2>
               <p className="text-xs text-muted-foreground">
-                逻辑分组(如一组 keepalived 主备);真实 VRRP 状态探测将在有主备环境后接入
+                {t('instances.clustersHint')}
               </p>
             </div>
             {writable && (
@@ -237,12 +239,12 @@ export default function InstancesPage() {
                 }}
               >
                 <Plus className="mr-1 size-4" />
-                添加集群
+                {t('instances.addCluster')}
               </Button>
             )}
           </div>
           {clusterList.length === 0 ? (
-            <p className="text-xs text-muted-foreground">尚未创建集群;不分组也可正常使用</p>
+            <p className="text-xs text-muted-foreground">{t('instances.noClusters')}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {clusterList.map((c) => (
@@ -256,7 +258,7 @@ export default function InstancesPage() {
                     <button
                       className="text-red-600 hover:text-red-700"
                       onClick={() => setDeletingCluster(c)}
-                      aria-label={`删除集群 ${c.name}`}
+                      aria-label={t('instances.deleteClusterAria', { name: c.name })}
                     >
                       <Trash2 className="size-3.5" />
                     </button>
@@ -276,18 +278,18 @@ export default function InstancesPage() {
             </div>
           ) : list.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              还没有实例,点击右上角「添加实例」注册第一台 HAProxy 节点
+              {t('instances.empty')}
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>名称</TableHead>
-                  <TableHead>dataplaneapi 地址</TableHead>
-                  <TableHead>集群</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead>添加时间</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead>{t('common.name')}</TableHead>
+                  <TableHead>{t('instances.addressHead')}</TableHead>
+                  <TableHead>{t('instances.clusterHead')}</TableHead>
+                  <TableHead>{t('instances.statusHead')}</TableHead>
+                  <TableHead>{t('instances.createdAtHead')}</TableHead>
+                  <TableHead className="text-right">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -298,13 +300,13 @@ export default function InstancesPage() {
                     <TableCell className="text-sm">{clusterName(inst.clusterId) ?? '—'}</TableCell>
                     <TableCell>
                       {inst.enabled ? (
-                        <Badge className="bg-green-600">启用</Badge>
+                        <Badge className="bg-green-600">{t('instances.enabled')}</Badge>
                       ) : (
-                        <Badge variant="secondary">停用</Badge>
+                        <Badge variant="secondary">{t('instances.disabled')}</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {new Date(inst.createdAt).toLocaleString('zh-CN')}
+                      {new Date(inst.createdAt).toLocaleString()}
                     </TableCell>
                     <TableCell className="space-x-1 text-right">
                       <Button
@@ -314,18 +316,18 @@ export default function InstancesPage() {
                         disabled={testMutation.isPending && testMutation.variables === inst.id}
                       >
                         <PlugZap className="mr-1 size-3.5" />
-                        测试
+                        {t('instances.test')}
                       </Button>
                       <Button variant="outline" size="sm" asChild>
                         <Link to={`/instances/${inst.id}/config`}>
                           <Waypoints className="mr-1 size-3.5" />
-                          配置
+                          {t('instances.config')}
                         </Link>
                       </Button>
                       <Button variant="outline" size="sm" asChild>
                         <Link to={`/instances/${inst.id}/stats`}>
                           <Activity className="mr-1 size-3.5" />
-                          监控
+                          {t('instances.monitor')}
                         </Link>
                       </Button>
                       {writable && (
@@ -356,14 +358,14 @@ export default function InstancesPage() {
       <Dialog open={dialogOpen} onOpenChange={(v) => !v && setDialogOpen(false)}>
         <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editing ? '编辑实例' : '添加实例'}</DialogTitle>
+            <DialogTitle>{editing ? t('instances.editTitle') : t('instances.addTitle')}</DialogTitle>
             <DialogDescription>
-              填写节点上 dataplaneapi 的地址与凭据(通常部署在 5555 端口)
+              {t('instances.dialogDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
-              <Label htmlFor="inst-name">名称</Label>
+              <Label htmlFor="inst-name">{t('common.name')}</Label>
               <Input
                 id="inst-name"
                 value={form.name}
@@ -372,7 +374,7 @@ export default function InstancesPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="inst-url">地址</Label>
+              <Label htmlFor="inst-url">{t('instances.addressLabel')}</Label>
               <Input
                 id="inst-url"
                 value={form.baseUrl}
@@ -381,7 +383,7 @@ export default function InstancesPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="inst-user">用户名</Label>
+              <Label htmlFor="inst-user">{t('login.username')}</Label>
               <Input
                 id="inst-user"
                 value={form.username}
@@ -390,17 +392,17 @@ export default function InstancesPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="inst-pass">密码</Label>
+              <Label htmlFor="inst-pass">{t('login.password')}</Label>
               <Input
                 id="inst-pass"
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder={editing ? '留空表示不修改' : 'userlist 中配置的密码'}
+                placeholder={editing ? t('instances.keepUnchanged') : t('instances.passPlaceholder')}
               />
             </div>
             <div className="grid gap-2">
-              <Label>集群(可选)</Label>
+              <Label>{t('instances.clusterOptional')}</Label>
               <Select
                 value={form.clusterId === null ? 'none' : String(form.clusterId)}
                 onValueChange={(v) =>
@@ -408,10 +410,10 @@ export default function InstancesPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="未分组" />
+                  <SelectValue placeholder={t('common.ungrouped')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">未分组</SelectItem>
+                  <SelectItem value="none">{t('common.ungrouped')}</SelectItem>
                   {clusterList.map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>
                       {c.name}
@@ -421,33 +423,33 @@ export default function InstancesPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="inst-metrics">Metrics 地址(可选)</Label>
+              <Label htmlFor="inst-metrics">{t('instances.metricsLabel')}</Label>
               <Input
                 id="inst-metrics"
                 value={form.metricsUrl}
                 onChange={(e) => setForm({ ...form, metricsUrl: e.target.value })}
-                placeholder="留空则按节点地址的 8404 端口推导"
+                placeholder={t('instances.metricsPlaceholder')}
               />
             </div>
 
             {/* 服务管理 SSH(可选):填写后可在监控页查看 dataplaneapi 服务状态并远程重启 */}
             <div className="rounded-md border p-3">
               <p className="mb-2 text-xs font-semibold text-muted-foreground">
-                服务管理 SSH(可选)— 用于查看 dataplaneapi 服务状态与远程重启
+                {t('instances.sshSection')}
               </p>
               <div className="grid gap-2">
                 <div className="grid grid-cols-[1fr_88px] gap-2">
                   <div className="grid gap-1.5">
-                    <Label htmlFor="inst-ssh-host">SSH 地址</Label>
+                    <Label htmlFor="inst-ssh-host">{t('instances.sshHost')}</Label>
                     <Input
                       id="inst-ssh-host"
                       value={form.sshHost}
                       onChange={(e) => setForm({ ...form, sshHost: e.target.value })}
-                      placeholder="留空则取节点地址的 host"
+                      placeholder={t('instances.sshHostPlaceholder')}
                     />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label htmlFor="inst-ssh-port">端口</Label>
+                    <Label htmlFor="inst-ssh-port">{t('instances.sshPort')}</Label>
                     <Input
                       id="inst-ssh-port"
                       value={form.sshPort}
@@ -458,16 +460,16 @@ export default function InstancesPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="grid gap-1.5">
-                    <Label htmlFor="inst-ssh-user">SSH 用户名</Label>
+                    <Label htmlFor="inst-ssh-user">{t('instances.sshUser')}</Label>
                     <Input
                       id="inst-ssh-user"
                       value={form.sshUser}
                       onChange={(e) => setForm({ ...form, sshUser: e.target.value })}
-                      placeholder="root / 专用运维账号"
+                      placeholder={t('instances.sshUserPlaceholder')}
                     />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label htmlFor="inst-ssh-unit">服务 unit 名</Label>
+                    <Label htmlFor="inst-ssh-unit">{t('instances.unitLabel')}</Label>
                     <Input
                       id="inst-ssh-unit"
                       value={form.sshUnit}
@@ -477,13 +479,13 @@ export default function InstancesPage() {
                   </div>
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="inst-ssh-key-fp">Host key 指纹</Label>
+                  <Label htmlFor="inst-ssh-key-fp">{t('instances.fpLabel')}</Label>
                   <div className="flex gap-2">
                     <Input
                       id="inst-ssh-key-fp"
                       value={form.sshHostKey}
                       readOnly
-                      placeholder="首次连接自动记录(TOFU),之后钉扎校验"
+                      placeholder={t('instances.fpPlaceholder')}
                       className="font-mono text-xs"
                     />
                     {form.sshHostKey && (
@@ -493,26 +495,26 @@ export default function InstancesPage() {
                         type="button"
                         onClick={() => setForm({ ...form, sshHostKey: '' })}
                       >
-                        重置
+                        {t('instances.fpReset')}
                       </Button>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    节点重装或更换主机 key 后需重置重录;保存时原样回传即保持不变
+                    {t('instances.fpNote')}
                   </p>
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="inst-ssh-pass">SSH 密码</Label>
+                  <Label htmlFor="inst-ssh-pass">{t('instances.sshPass')}</Label>
                   <Input
                     id="inst-ssh-pass"
                     type="password"
                     value={form.sshPassword}
                     onChange={(e) => setForm({ ...form, sshPassword: e.target.value })}
-                    placeholder={editing && form.sshUser ? '留空表示不修改' : '与私钥二选一'}
+                    placeholder={editing && form.sshUser ? t('instances.keepUnchanged') : t('instances.sshPassPlaceholder')}
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="inst-ssh-key">SSH 私钥(PEM,可选)</Label>
+                  <Label htmlFor="inst-ssh-key">{t('instances.sshKeyLabel')}</Label>
                   <textarea
                     id="inst-ssh-key"
                     value={form.sshPrivateKey}
@@ -522,7 +524,7 @@ export default function InstancesPage() {
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="inst-log-path">haproxy 日志路径(可选)</Label>
+                  <Label htmlFor="inst-log-path">{t('instances.logPathLabel')}</Label>
                   <Input
                     id="inst-log-path"
                     value={form.logPath}
@@ -530,11 +532,11 @@ export default function InstancesPage() {
                     placeholder="/var/log/haproxy.log"
                   />
                   <p className="text-xs text-muted-foreground">
-                    「日志」页签经 SSH tail -f 实时读取该文件
+                    {t('instances.logPathNote')}
                   </p>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  重启服务需要该用户对 systemctl restart 具备 sudo 免密权限(NOPASSWD 白名单)
+                  {t('instances.sudoNote')}
                 </p>
               </div>
             </div>
@@ -544,12 +546,12 @@ export default function InstancesPage() {
                 checked={form.enabled}
                 onCheckedChange={(v) => setForm({ ...form, enabled: v })}
               />
-              <Label htmlFor="inst-enabled">启用</Label>
+              <Label htmlFor="inst-enabled">{t('instances.enabledLabel')}</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               disabled={
@@ -561,7 +563,7 @@ export default function InstancesPage() {
               onClick={() => saveMutation.mutate({ form, id: editing?.id })}
             >
               {saveMutation.isPending && <Loader2 className="mr-1 size-4 animate-spin" />}
-              保存
+              {t('common.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -571,12 +573,12 @@ export default function InstancesPage() {
       <Dialog open={clusterDialogOpen} onOpenChange={(v) => !v && setClusterDialogOpen(false)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>添加集群</DialogTitle>
-            <DialogDescription>创建一个逻辑分组(如一组 keepalived 主备节点)</DialogDescription>
+            <DialogTitle>{t('instances.addClusterTitle')}</DialogTitle>
+            <DialogDescription>{t('instances.addClusterDesc')}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
-              <Label>名称</Label>
+              <Label>{t('common.name')}</Label>
               <Input
                 value={clusterForm.name}
                 onChange={(e) => setClusterForm({ ...clusterForm, name: e.target.value })}
@@ -584,7 +586,7 @@ export default function InstancesPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>VIP(可选)</Label>
+              <Label>{t('instances.vipOptional')}</Label>
               <Input
                 value={clusterForm.vip}
                 onChange={(e) => setClusterForm({ ...clusterForm, vip: e.target.value })}
@@ -594,14 +596,14 @@ export default function InstancesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setClusterDialogOpen(false)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               disabled={clusterCreateMutation.isPending || clusterForm.name === ''}
               onClick={() => clusterCreateMutation.mutate()}
             >
               {clusterCreateMutation.isPending && <Loader2 className="mr-1 size-4 animate-spin" />}
-              创建
+              {t('instances.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -611,14 +613,14 @@ export default function InstancesPage() {
       <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>删除实例</DialogTitle>
+            <DialogTitle>{t('instances.deleteTitle')}</DialogTitle>
             <DialogDescription>
-              确定删除实例「{deleting?.name}」?仅移除 WebUI 中的注册,不影响节点上的 HAProxy。
+              {t('instances.deleteDesc', { name: deleting?.name ?? '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleting(null)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -626,7 +628,7 @@ export default function InstancesPage() {
               onClick={() => deleting && deleteMutation.mutate(deleting.id)}
             >
               {deleteMutation.isPending && <Loader2 className="mr-1 size-4 animate-spin" />}
-              删除
+              {t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -639,14 +641,14 @@ export default function InstancesPage() {
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>删除集群</DialogTitle>
+            <DialogTitle>{t('instances.deleteClusterTitle')}</DialogTitle>
             <DialogDescription>
-              确定删除集群「{deletingCluster?.name}」?组内实例不会被删除,只会解绑为未分组。
+              {t('instances.deleteClusterDesc', { name: deletingCluster?.name ?? '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeletingCluster(null)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -654,7 +656,7 @@ export default function InstancesPage() {
               onClick={() => deletingCluster && clusterDeleteMutation.mutate(deletingCluster.id)}
             >
               {clusterDeleteMutation.isPending && <Loader2 className="mr-1 size-4 animate-spin" />}
-              删除
+              {t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

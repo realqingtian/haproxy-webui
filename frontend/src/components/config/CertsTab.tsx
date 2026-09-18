@@ -24,12 +24,14 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { api, apiText, ApiError, canWrite } from '@/lib/api'
+import { useTranslation } from 'react-i18next'
 import { fmtBytes } from '@/lib/format'
 import type { SSLCert } from '@/types'
 
 // 证书管理页签:列表 / 上传 / 查看元数据 / 删除。
 // dataplaneapi storage 接口不提供证书内容读取,「查看」展示的是元数据。
 export function CertsTab({ instanceId }: { instanceId: string }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const writable = canWrite()
   const [viewCert, setViewCert] = useState<SSLCert | null>(null)
@@ -57,11 +59,7 @@ export function CertsTab({ instanceId }: { instanceId: string }) {
         method: 'DELETE',
       }),
     onSuccess: (r) => {
-      toast.success(
-        r.reloadId
-          ? `证书已删除,已触发 reload(${r.reloadId}),结果稍后可在告警与巡检中确认`
-          : '证书已删除',
-      )
+      toast.success(r.reloadId ? t('certs.deletedWithReload', { id: r.reloadId }) : t('certs.deleted'))
       setDeleteTarget(null)
       invalidate()
     },
@@ -80,7 +78,7 @@ export function CertsTab({ instanceId }: { instanceId: string }) {
     return (
       <Card>
         <CardContent className="space-y-2 pt-6 text-sm">
-          <p className="text-red-600">无法获取证书列表:{err.message}</p>
+          <p className="text-red-600">{t('certs.loadFailed', { msg: err.message })}</p>
           {err.hint && <p className="text-muted-foreground">{err.hint}</p>}
         </CardContent>
       </Card>
@@ -93,28 +91,27 @@ export function CertsTab({ instanceId }: { instanceId: string }) {
       <CardContent className="pt-6">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            节点证书目录(dataplaneapi --ssl-certs-dir)中的证书;上传仅写文件,
-            需在配置中引用后 reload 才被 HAProxy 加载
+            {t('certs.hint')}
           </p>
           {writable && (
             <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)}>
               <Plus className="mr-1 size-4" />
-              上传证书
+              {t('certs.upload')}
             </Button>
           )}
         </div>
         {list.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">暂无证书</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">{t('certs.empty')}</p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>文件名</TableHead>
-                <TableHead>主体</TableHead>
-                <TableHead>签发者</TableHead>
-                <TableHead>有效期至</TableHead>
-                <TableHead>大小</TableHead>
-                <TableHead className="text-right">操作</TableHead>
+                <TableHead>{t('certs.nameHead')}</TableHead>
+                <TableHead>{t('certs.subjectHead')}</TableHead>
+                <TableHead>{t('certs.issuerHead')}</TableHead>
+                <TableHead>{t('certs.expiryHead')}</TableHead>
+                <TableHead>{t('certs.sizeHead')}</TableHead>
+                <TableHead className="text-right">{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -131,7 +128,7 @@ export function CertsTab({ instanceId }: { instanceId: string }) {
                     <Button
                       variant="outline"
                       size="sm"
-                      aria-label={`查看 ${c.storage_name}`}
+                      aria-label={t('certs.viewAria', { name: c.storage_name })}
                       onClick={() => setViewCert(c)}
                     >
                       <Eye className="size-3.5" />
@@ -141,7 +138,7 @@ export function CertsTab({ instanceId }: { instanceId: string }) {
                         variant="outline"
                         size="sm"
                         className="text-red-600 hover:text-red-700"
-                        aria-label={`删除 ${c.storage_name}`}
+                        aria-label={t('certs.deleteAria', { name: c.storage_name })}
                         onClick={() => setDeleteTarget(c)}
                       >
                         <Trash2 className="size-3.5" />
@@ -179,40 +176,42 @@ export function CertsTab({ instanceId }: { instanceId: string }) {
 }
 
 function ExpiryCell({ notAfter }: { notAfter: string }) {
-  const t = new Date(notAfter)
-  if (Number.isNaN(t.getTime())) return <span className="text-xs text-muted-foreground">—</span>
-  const days = Math.floor((t.getTime() - Date.now()) / 86_400_000)
-  const label = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
-  if (days < 0) return <Badge variant="destructive">已过期</Badge>
+  const { t } = useTranslation()
+  const date = new Date(notAfter)
+  if (Number.isNaN(date.getTime())) return <span className="text-xs text-muted-foreground">—</span>
+  const days = Math.floor((date.getTime() - Date.now()) / 86_400_000)
+  const label = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  if (days < 0) return <Badge variant="destructive">{t('certs.expired')}</Badge>
   if (days < 30)
     return (
       <Badge className="bg-yellow-600">
-        {label}({days} 天)
+        {t('certs.expiring', { label, days })}
       </Badge>
     )
   return <span className="text-xs">{label}</span>
 }
 
 function ViewCertDialog({ cert, onClose }: { cert: SSLCert | null; onClose: () => void }) {
+  const { t } = useTranslation()
   return (
     <Dialog open={!!cert} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>证书详情{cert ? ` · ${cert.storage_name}` : ''}</DialogTitle>
-          <DialogDescription>节点上的证书元数据(dataplaneapi 不提供内容读取)</DialogDescription>
+          <DialogTitle>{t('certs.detailTitle', { name: cert?.storage_name ?? '' })}</DialogTitle>
+          <DialogDescription>{t('certs.detailDesc')}</DialogDescription>
         </DialogHeader>
         {cert && (
           <dl className="space-y-2 text-sm">
             {(
               [
-                ['文件路径', cert.file],
-                ['主体', cert.subject],
-                ['签发者', cert.issuers],
-                ['序列号', cert.serial],
-                ['生效时间', fmtTime(cert.not_before)],
-                ['过期时间', fmtTime(cert.not_after)],
-                ['大小', fmtBytes(cert.size)],
-                ['说明', cert.description],
+                [t('certs.fFile'), cert.file],
+                [t('certs.fSubject'), cert.subject],
+                [t('certs.fIssuer'), cert.issuers],
+                [t('certs.fSerial'), cert.serial],
+                [t('certs.fNotBefore'), fmtTime(cert.not_before)],
+                [t('certs.fNotAfter'), fmtTime(cert.not_after)],
+                [t('certs.fSize'), fmtBytes(cert.size)],
+                [t('certs.fDesc'), cert.description],
               ] as const
             ).map(([k, v]) => (
               <div key={k} className="grid grid-cols-[88px_1fr] gap-2">
@@ -233,6 +232,7 @@ function UploadCertDialog(props: {
   onClose: () => void
   onDone: () => void
 }) {
+  const { t } = useTranslation()
   const [name, setName] = useState('')
   const [content, setContent] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -250,7 +250,7 @@ function UploadCertDialog(props: {
         body: JSON.stringify({ name: name.trim(), content }),
       }),
     onSuccess: (c) => {
-      toast.success(`证书 ${c.storage_name} 已上传(未触发 reload)`)
+      toast.success(t('certs.uploaded', { name: c.storage_name }))
       reset()
       props.onClose()
       props.onDone()
@@ -261,7 +261,7 @@ function UploadCertDialog(props: {
   const pickFile = (file: File | undefined) => {
     if (!file) return
     if (file.size > 128 << 10) {
-      toast.error('文件超过 128KB 上限')
+      toast.error(t('certs.tooLarge'))
       return
     }
     const reader = new FileReader()
@@ -284,14 +284,14 @@ function UploadCertDialog(props: {
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>上传证书</DialogTitle>
+          <DialogTitle>{t('certs.uploadTitle')}</DialogTitle>
           <DialogDescription>
-            PEM 文本(可含私钥与证书链)。仅写入节点证书目录,不触发 reload
+            {t('certs.uploadDesc')}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="cert-file">选择文件</Label>
+            <Label htmlFor="cert-file">{t('certs.pickFile')}</Label>
             <Input
               id="cert-file"
               type="file"
@@ -301,7 +301,7 @@ function UploadCertDialog(props: {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="cert-name">证书文件名</Label>
+            <Label htmlFor="cert-name">{t('certs.nameLabel')}</Label>
             <Input
               id="cert-name"
               value={name}
@@ -310,7 +310,7 @@ function UploadCertDialog(props: {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="cert-content">内容(PEM)</Label>
+            <Label htmlFor="cert-content">{t('certs.contentLabel')}</Label>
             <textarea
               id="cert-content"
               value={content}
@@ -322,14 +322,14 @@ function UploadCertDialog(props: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={props.onClose}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button
             disabled={!name.trim() || !content.trim() || upload.isPending}
             onClick={() => upload.mutate()}
           >
             <Upload className="mr-1 size-4" />
-            {upload.isPending ? '上传中…' : '上传'}
+            {upload.isPending ? t('common.loading') : t('certs.upload')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -345,35 +345,35 @@ function DeleteCertDialog(props: {
   onClose: () => void
   onConfirm: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <Dialog open={!!props.cert} onOpenChange={(o) => !o && props.onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>删除证书{props.cert ? ` · ${props.cert.storage_name}` : ''}</DialogTitle>
+          <DialogTitle>{t('certs.deleteTitle', { name: props.cert?.storage_name ?? '' })}</DialogTitle>
           <DialogDescription>
-            删除节点上的证书文件;dataplaneapi 删除后会触发一次 reload
+            {t('certs.deleteDesc')}
           </DialogDescription>
         </DialogHeader>
         {props.rawLoading ? (
-          <p className="text-sm text-muted-foreground">正在检查配置引用…</p>
+          <p className="text-sm text-muted-foreground">{t('certs.checkingRefs')}</p>
         ) : props.rawRefs > 0 ? (
           <p className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
             <Badge variant="destructive" className="mr-1">
-              注意
+              {t('certs.warn')}
             </Badge>
-            原始配置中有 {props.rawRefs} 处引用「{props.cert?.storage_name}
-            」,删除后 reload 将失败(运行中的旧进程不受影响,告警会通知)。请先移除配置引用再删除。
+            {t('certs.referenced', { count: props.rawRefs, name: props.cert?.storage_name ?? '' })}
           </p>
         ) : (
-          <p className="text-sm text-muted-foreground">原始配置中未发现对该文件名的引用。</p>
+          <p className="text-sm text-muted-foreground">{t('certs.noRefs')}</p>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={props.onClose}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button variant="destructive" disabled={props.pending} onClick={props.onConfirm}>
             <Trash2 className="mr-1 size-4" />
-            {props.pending ? '删除中…' : '确认删除'}
+            {props.pending ? t('common.loading') : t('common.delete')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -387,9 +387,10 @@ function fmtTime(iso: string): string {
 }
 
 function toastError(e: unknown) {
+  const { t } = useTranslation()
   if (e instanceof ApiError) {
     toast.error(e.hint ? `${e.message}(${e.hint})` : e.message)
   } else {
-    toast.error('请求失败')
+    toast.error(t('common.requestFailed'))
   }
 }

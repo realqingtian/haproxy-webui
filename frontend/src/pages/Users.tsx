@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Loader2, LogOut, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -34,15 +35,15 @@ import { api, ApiError, getCachedUser } from '@/lib/api'
 import type { Role, User } from '@/types'
 
 const ROLE_LABELS: Record<Role, string> = {
-  admin: '管理员',
-  operator: '操作员',
-  viewer: '只读',
+  admin: 'role.admin',
+  operator: 'role.operator',
+  viewer: 'role.viewer',
 }
 
 const ROLE_HINTS: Record<Role, string> = {
-  admin: '用户管理 + 全部操作',
-  operator: '实例与配置的写操作',
-  viewer: '只读',
+  admin: 'users.descAdmin',
+  operator: 'users.descOperator',
+  viewer: 'users.descViewer',
 }
 
 interface UserForm {
@@ -52,6 +53,7 @@ interface UserForm {
 }
 
 export default function UsersPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const me = getCachedUser()
   const [dialog, setDialog] = useState<{ mode: 'create' | 'edit'; user?: User } | null>(null)
@@ -74,30 +76,30 @@ export default function UsersPage() {
       return api<User>('/api/users', { method: 'POST', body: JSON.stringify(v.form) })
     },
     onSuccess: (_d, v) => {
-      toast.success(v.id ? '用户已更新' : '用户已创建')
+      toast.success(v.id ? t('users.updated') : t('users.created'))
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setDialog(null)
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api(`/api/users/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      toast.success('用户已删除')
+      toast.success(t('users.deleted'))
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setDeleting(null)
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
   const forceLogoutMutation = useMutation({
     mutationFn: (id: number) => api(`/api/users/${id}/force-logout`, { method: 'POST' }),
     onSuccess: () => {
-      toast.success('已强制下线,该用户需重新登录')
+      toast.success(t('users.forceLoggedOut'))
       setLoggingOut(null)
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
   const list = users.data ?? []
@@ -106,9 +108,9 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">用户与权限</h1>
+          <h1 className="text-2xl font-bold">{t('nav.users')}</h1>
           <p className="text-sm text-muted-foreground">
-            角色:管理员(用户管理 + 全部操作)· 操作员(写操作)· 只读(仅查看)
+            {t('users.subtitle')}
           </p>
         </div>
         <Button
@@ -118,7 +120,7 @@ export default function UsersPage() {
           }}
         >
           <Plus className="mr-1 size-4" />
-          添加用户
+          {t('users.add')}
         </Button>
       </div>
 
@@ -132,10 +134,10 @@ export default function UsersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>用户名</TableHead>
-                  <TableHead>角色</TableHead>
-                  <TableHead>创建时间</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead>{t('login.username')}</TableHead>
+                  <TableHead>{t('users.roleHead')}</TableHead>
+                  <TableHead>{t('instances.createdAtHead')}</TableHead>
+                  <TableHead className="text-right">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -145,12 +147,12 @@ export default function UsersPage() {
                       {u.username}
                       {me?.username === u.username && (
                         <Badge variant="secondary" className="ml-2">
-                          当前
+                          {t('users.current')}
                         </Badge>
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{ROLE_LABELS[u.role]}</Badge>
+                      <Badge variant="outline">{t(ROLE_LABELS[u.role] ?? u.role)}</Badge>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(u.createdAt).toLocaleString('zh-CN')}
@@ -165,12 +167,12 @@ export default function UsersPage() {
                         }}
                       >
                         <Pencil className="mr-1 size-3.5" />
-                        编辑
+                        {t('common.edit')}
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        aria-label={`强制下线 ${u.username}`}
+                        aria-label={t('users.forceLogoutAria', { name: u.username })}
                         disabled={me?.username === u.username}
                         onClick={() => setLoggingOut(u)}
                       >
@@ -203,9 +205,9 @@ export default function UsersPage() {
         {dialog && (
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle>{dialog.mode === 'create' ? '添加用户' : `编辑 ${dialog.user?.username}`}</DialogTitle>
+              <DialogTitle>{dialog.mode === 'create' ? t('users.add') : t('users.editTitle', { name: dialog.user?.username ?? '' })}</DialogTitle>
               <DialogDescription>
-                {dialog.mode === 'create' ? '创建账号并分配角色' : '修改角色或重置密码(密码留空则不修改)'}
+                {dialog.mode === 'create' ? t('users.createDesc') : t('users.editDesc')}
               </DialogDescription>
             </DialogHeader>
             <form
@@ -216,7 +218,7 @@ export default function UsersPage() {
             >
               <div className="grid gap-4 py-2">
                 <div className="grid gap-2">
-                  <Label>用户名</Label>
+                  <Label>{t('login.username')}</Label>
                   <Input
                     value={form.username}
                     onChange={(e) => setForm({ ...form, username: e.target.value })}
@@ -224,16 +226,16 @@ export default function UsersPage() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label>{dialog.mode === 'create' ? '初始密码' : '重置密码(留空不修改)'}</Label>
+                  <Label>{dialog.mode === 'create' ? t('users.initPassword') : t('users.resetPassword')}</Label>
                   <Input
                     type="password"
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder={dialog.mode === 'edit' ? '不修改' : '至少 6 位'}
+                    placeholder={dialog.mode === 'edit' ? t('users.keepUnchanged') : t('users.minSix')}
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label>角色</Label>
+                  <Label>{t('users.roleHead')}</Label>
                   <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as Role })}>
                     <SelectTrigger>
                       <SelectValue />
@@ -241,7 +243,7 @@ export default function UsersPage() {
                     <SelectContent>
                       {(Object.keys(ROLE_LABELS) as Role[]).map((r) => (
                         <SelectItem key={r} value={r}>
-                          {ROLE_LABELS[r]} · {ROLE_HINTS[r]}
+                          {t(ROLE_LABELS[r])} · {t(ROLE_HINTS[r])}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -250,7 +252,7 @@ export default function UsersPage() {
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                  取消
+                  {t('common.cancel')}
                 </Button>
                 <Button
                   type="submit"
@@ -261,7 +263,7 @@ export default function UsersPage() {
                   }
                 >
                   {saveMutation.isPending && <Loader2 className="mr-1 size-4 animate-spin" />}
-                  保存
+                  {t('common.save')}
                 </Button>
               </DialogFooter>
             </form>
@@ -272,12 +274,12 @@ export default function UsersPage() {
       <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>删除用户</DialogTitle>
-            <DialogDescription>确定删除用户「{deleting?.username}」?</DialogDescription>
+            <DialogTitle>{t('users.deleteTitle')}</DialogTitle>
+            <DialogDescription>{t('users.deleteDesc', { name: deleting?.username ?? '' })}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleting(null)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -285,7 +287,7 @@ export default function UsersPage() {
               onClick={() => deleting && deleteMutation.mutate(deleting.id)}
             >
               {deleteMutation.isPending && <Loader2 className="mr-1 size-4 animate-spin" />}
-              删除
+              {t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -294,14 +296,14 @@ export default function UsersPage() {
       <Dialog open={loggingOut !== null} onOpenChange={(v) => !v && setLoggingOut(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>强制下线</DialogTitle>
+            <DialogTitle>{t('users.forceLogoutTitle')}</DialogTitle>
             <DialogDescription>
-              确定吊销「{loggingOut?.username}」的全部会话?该用户将被登出,需重新登录。
+              {t('users.forceLogoutDesc', { name: loggingOut?.username ?? '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLoggingOut(null)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -309,7 +311,7 @@ export default function UsersPage() {
               onClick={() => loggingOut && forceLogoutMutation.mutate(loggingOut.id)}
             >
               {forceLogoutMutation.isPending && <Loader2 className="mr-1 size-4 animate-spin" />}
-              强制下线
+              {t('users.forceLogout')}
             </Button>
           </DialogFooter>
         </DialogContent>

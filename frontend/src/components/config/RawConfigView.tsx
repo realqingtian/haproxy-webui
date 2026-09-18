@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useTranslation } from 'react-i18next'
 
 // 原始配置视图:按查询串逐行高亮,支持上一个 / 下一个命中跳转(带行号)
 export function RawConfigView({ text, query }: { text: string; query: string }) {
+  const { t } = useTranslation()
   const lines = useMemo(() => text.split('\n'), [text])
   const needle = query.trim().toLowerCase()
   const hits = useMemo(
@@ -44,15 +46,15 @@ export function RawConfigView({ text, query }: { text: string; query: string }) 
     <div className="space-y-2">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
-          共 {lines.length} 行
+          {t('config.totalLines', { count: lines.length })}
           {needle &&
             (hits.length > 0 ? (
               <>
-                ,命中 {hits.length} 行
-                {hits.length > 1 && `,当前第 ${Math.min(hitPos, hits.length - 1) + 1} 处`}
+                {' '}{t('config.hitLines', { count: hits.length })}
+                {hits.length > 1 && t('config.hitPos', { pos: Math.min(hitPos, hits.length - 1) + 1 })}
               </>
             ) : (
-              ',无命中'
+              <>{t('config.noHit')}</>
             ))}
         </span>
         {needle && hits.length > 1 && (

@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import type { ConfigOp } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 interface ServerRow {
   name: string
@@ -34,6 +35,7 @@ export function TemplateDialog(props: {
   onSubmit: (ops: ConfigOp[]) => void
   saving: boolean
 }) {
+  const { t } = useTranslation()
   const { open, onClose, onSubmit, saving } = props
   const [mode, setMode] = useState<'http' | 'tcp'>('http')
   const [name, setName] = useState('')
@@ -79,28 +81,28 @@ export function TemplateDialog(props: {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>从模板创建负载均衡</DialogTitle>
+          <DialogTitle>{t('template.title')}</DialogTitle>
           <DialogDescription>
-            一次事务内创建 frontend + backend + 服务器组;生成的配置可在「原始配置」中核对,可回滚
+            {t('template.desc')}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit}>
           <div className="grid gap-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
-                <Label>协议模式</Label>
+                <Label>{t('template.protocol')}</Label>
                 <Select value={mode} onValueChange={(v) => setMode(v as 'http' | 'tcp')}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="http">HTTP(七层)</SelectItem>
-                    <SelectItem value="tcp">TCP(四层)</SelectItem>
+                    <SelectItem value="http">{t('template.http')}</SelectItem>
+                    <SelectItem value="tcp">{t('template.tcp')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>frontend 名称</Label>
+                <Label>{t('template.frontendName')}</Label>
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
@@ -110,7 +112,7 @@ export function TemplateDialog(props: {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
-                <Label>监听端口</Label>
+                <Label>{t('template.listenPort')}</Label>
                 <Input
                   value={listenPort}
                   onChange={(e) => setListenPort(e.target.value.replace(/\D/g, ''))}
@@ -118,7 +120,7 @@ export function TemplateDialog(props: {
                 />
               </div>
               <div className="grid gap-2">
-                <Label>backend 名称</Label>
+                <Label>{t('template.backendName')}</Label>
                 <Input
                   value={backendName}
                   onChange={(e) => setBackendName(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
@@ -128,7 +130,7 @@ export function TemplateDialog(props: {
             </div>
             <div className="rounded-md border p-3">
               <div className="mb-2 flex items-center justify-between">
-                <Label className="text-sm font-medium">后端服务器</Label>
+                <Label className="text-sm font-medium">{t('template.serversLabel')}</Label>
                 <Button
                   type="button"
                   variant="outline"
@@ -138,7 +140,7 @@ export function TemplateDialog(props: {
                   }
                 >
                   <Plus className="mr-1 size-3.5" />
-                  添加
+                  {t('template.addServer')}
                 </Button>
               </div>
               <div className="space-y-2">
@@ -149,21 +151,21 @@ export function TemplateDialog(props: {
                       onChange={(e) =>
                         setServers(servers.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))
                       }
-                      placeholder="名称"
+                      placeholder={t('common.name')}
                     />
                     <Input
                       value={s.address}
                       onChange={(e) =>
                         setServers(servers.map((x, j) => (j === i ? { ...x, address: e.target.value } : x)))
                       }
-                      placeholder="服务器地址"
+                      placeholder={t('template.serverAddress')}
                     />
                     <Input
                       value={s.port}
                       onChange={(e) =>
                         setServers(servers.map((x, j) => (j === i ? { ...x, port: e.target.value.replace(/\D/g, '') } : x)))
                       }
-                      placeholder="端口"
+                      placeholder={t('instances.sshPort')}
                     />
                     <Button
                       type="button"
@@ -179,17 +181,17 @@ export function TemplateDialog(props: {
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <Switch checked={check} onCheckedChange={setCheck} />
-                <Label className="text-sm">启用健康检查</Label>
+                <Label className="text-sm">{t('dlg.checkLabel')}</Label>
               </div>
             </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={saving || !valid}>
               {saving && <Loader2 className="mr-1 size-4 animate-spin" />}
-              生成并保存
+              {t('template.generate')}
             </Button>
           </DialogFooter>
         </form>

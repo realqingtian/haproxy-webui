@@ -193,7 +193,7 @@ test('v0.7 配置搜索与证书冒烟', async ({ page }) => {
   await page.getByRole('dialog').press('Escape')
   await certRow.getByRole('button', { name: `删除 ${CERT_NAME}` }).click()
   await expect(page.getByText(/原始配置中未发现对该文件名的引用/)).toBeVisible()
-  await page.getByRole('dialog').getByRole('button', { name: '确认删除' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click()
   await expect(page.getByText(/证书已删除/)).toBeVisible()
 
   // ---- Maps 页签:条目增删(即时生效 + force_sync 持久化) ----

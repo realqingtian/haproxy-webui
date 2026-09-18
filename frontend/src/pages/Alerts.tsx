@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Loader2, Pencil, Plus, Send, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -35,16 +36,16 @@ import { api, ApiError } from '@/lib/api'
 import type { AlertChannel, AlertChannelType, OpsSettings } from '@/types'
 
 const CHANNEL_LABELS: Record<AlertChannelType, string> = {
-  feishu: '飞书机器人',
-  dingtalk: '钉钉机器人',
-  wecom: '企业微信机器人',
+  feishu: 'alerts.feishu',
+  dingtalk: 'alerts.dingtalk',
+  wecom: 'alerts.wecom',
 }
 
 const RESULT_LABELS: Record<string, { label: string; cls: string }> = {
-  clean: { label: '无变化', cls: 'bg-green-600/15 text-green-600' },
-  baseline: { label: '已建立基线', cls: 'bg-green-600/15 text-green-600' },
-  drift: { label: '发现漂移', cls: 'bg-yellow-600/15 text-yellow-600' },
-  error: { label: '巡检失败', cls: 'bg-red-600/15 text-red-600' },
+  clean: { label: 'alerts.resultClean', cls: 'bg-green-600/15 text-green-600' },
+  baseline: { label: 'alerts.resultBaseline', cls: 'bg-green-600/15 text-green-600' },
+  drift: { label: 'alerts.resultDrift', cls: 'bg-yellow-600/15 text-yellow-600' },
+  error: { label: 'alerts.resultError', cls: 'bg-red-600/15 text-red-600' },
 }
 
 interface ChannelForm {
@@ -57,6 +58,7 @@ interface ChannelForm {
 const EMPTY_CHANNEL: ChannelForm = { name: '', type: 'feishu', webhookUrl: '', enabled: true }
 
 export default function AlertsPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [channelDialog, setChannelDialog] = useState<{ mode: 'create' | 'edit'; ch?: AlertChannel } | null>(null)
   const [form, setForm] = useState<ChannelForm>(EMPTY_CHANNEL)
@@ -94,11 +96,11 @@ export default function AlertsPage() {
         }),
       }),
     onSuccess: () => {
-      toast.success('巡检设置已保存,一个调度周期内生效')
+      toast.success(t('alerts.settingsSaved'))
       setSettingsDirty(false)
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
   const saveChannel = useMutation({
@@ -114,27 +116,27 @@ export default function AlertsPage() {
         : api<AlertChannel>('/api/alert-channels', { method: 'POST', body })
     },
     onSuccess: (_d, v) => {
-      toast.success(v.id ? '渠道已更新' : '渠道已创建')
+      toast.success(v.id ? t('alerts.channelUpdated') : t('alerts.channelCreated'))
       queryClient.invalidateQueries({ queryKey: ['alert-channels'] })
       setChannelDialog(null)
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
   const deleteChannel = useMutation({
     mutationFn: (id: number) => api(`/api/alert-channels/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      toast.success('渠道已删除')
+      toast.success(t('alerts.channelDeleted'))
       queryClient.invalidateQueries({ queryKey: ['alert-channels'] })
       setDeleting(null)
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '请求失败'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('common.requestFailed')),
   })
 
   const testChannel = useMutation({
     mutationFn: (id: number) => api<{ ok: boolean }>(`/api/alert-channels/${id}/test`, { method: 'POST' }),
-    onSuccess: () => toast.success('测试消息已发送,请在群里确认'),
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : '发送失败'),
+    onSuccess: () => toast.success(t('alerts.testSent')),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : t('alerts.sendFailed')),
   })
 
   const channelList = channels.data ?? []
@@ -146,23 +148,23 @@ export default function AlertsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">告警与巡检</h1>
+        <h1 className="text-2xl font-bold">{t('nav.alerts')}</h1>
         <p className="text-sm text-muted-foreground">
-          reload 失败、节点失联、backend 全 DOWN 时推送 Webhook;配置快照定时巡检发现漂移
+          {t('alerts.subtitle')}
         </p>
       </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
-            <CardTitle className="text-base">巡检设置</CardTitle>
-            <CardDescription>保存后在一个调度周期(15 秒)内生效,无需重启</CardDescription>
+            <CardTitle className="text-base">{t('alerts.settingsTitle')}</CardTitle>
+            <CardDescription>{t('alerts.settingsDesc')}</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             <div className="grid gap-2">
-              <Label htmlFor="snap-min">快照巡检周期(分钟,0 = 关闭)</Label>
+              <Label htmlFor="snap-min">{t('alerts.snapInterval')}</Label>
               <Input
                 id="snap-min"
                 type="number"
@@ -176,7 +178,7 @@ export default function AlertsPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="mon-sec">健康探测周期(秒,≥10)</Label>
+              <Label htmlFor="mon-sec">{t('alerts.monInterval')}</Label>
               <Input
                 id="mon-sec"
                 type="number"
@@ -190,7 +192,7 @@ export default function AlertsPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="cooldown-min">告警冷却(分钟,≥1)</Label>
+              <Label htmlFor="cooldown-min">{t('alerts.cooldown')}</Label>
               <Input
                 id="cooldown-min"
                 type="number"
@@ -209,22 +211,22 @@ export default function AlertsPage() {
             onClick={() => saveSettings.mutate()}
           >
             {saveSettings.isPending && <Loader2 className="mr-1 size-4 animate-spin" />}
-            保存设置
+            {t('alerts.saveSettings')}
           </Button>
 
           {statusList.length > 0 && (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>实例</TableHead>
-                  <TableHead>上次快照巡检</TableHead>
-                  <TableHead>结果</TableHead>
-                  <TableHead>说明</TableHead>
+                  <TableHead>{t('monitoring.instanceHead')}</TableHead>
+                  <TableHead>{t('alerts.lastSnapshot')}</TableHead>
+                  <TableHead>{t('alerts.resultHead')}</TableHead>
+                  <TableHead>{t('alerts.detailHead')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {statusList.map((s) => {
-                  const r = RESULT_LABELS[s.result] ?? { label: s.result || '未运行', cls: '' }
+                  const r = RESULT_LABELS[s.result] ?? { label: s.result || t('alerts.notRun'), cls: '' }
                   return (
                     <TableRow key={s.instanceId}>
                       <TableCell className="font-medium">{s.instanceName}</TableCell>
@@ -233,7 +235,7 @@ export default function AlertsPage() {
                       </TableCell>
                       <TableCell>
                         <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${r.cls}`}>
-                          {r.label}
+                          {t(r.label)}
                         </span>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{s.detail || '—'}</TableCell>
@@ -249,8 +251,8 @@ export default function AlertsPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
-            <CardTitle className="text-base">告警渠道</CardTitle>
-            <CardDescription>支持飞书 / 钉钉 / 企业微信群机器人 webhook</CardDescription>
+            <CardTitle className="text-base">{t('alerts.channelsTitle')}</CardTitle>
+            <CardDescription>{t('alerts.channelsDesc')}</CardDescription>
           </div>
           <Button
             onClick={() => {
@@ -259,7 +261,7 @@ export default function AlertsPage() {
             }}
           >
             <Plus className="mr-1 size-4" />
-            添加渠道
+            {t('alerts.addChannel')}
           </Button>
         </CardHeader>
         <CardContent>
@@ -269,17 +271,17 @@ export default function AlertsPage() {
             </div>
           ) : channelList.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              尚未配置告警渠道。添加机器人 webhook 后,告警事件会推送到所有启用渠道。
+              {t('alerts.noChannels')}
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>名称</TableHead>
-                  <TableHead>类型</TableHead>
+                  <TableHead>{t('common.name')}</TableHead>
+                  <TableHead>{t('alerts.typeHead')}</TableHead>
                   <TableHead>Webhook</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead>{t('instances.statusHead')}</TableHead>
+                  <TableHead className="text-right">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -294,16 +296,16 @@ export default function AlertsPage() {
                     </TableCell>
                     <TableCell>
                       {ch.enabled ? (
-                        <Badge className="bg-green-600/15 text-green-600">启用</Badge>
+                        <Badge className="bg-green-600/15 text-green-600">{t('instances.enabled')}</Badge>
                       ) : (
-                        <Badge variant="secondary">停用</Badge>
+                        <Badge variant="secondary">{t('instances.disabled')}</Badge>
                       )}
                     </TableCell>
                     <TableCell className="space-x-1 text-right">
                       <Button
                         variant="outline"
                         size="sm"
-                        aria-label={`测试 ${ch.name}`}
+                        aria-label={t('alerts.testAria', { name: ch.name })}
                         disabled={testing === ch.id}
                         onClick={() => {
                           setTesting(ch.id)
@@ -330,7 +332,7 @@ export default function AlertsPage() {
                         variant="outline"
                         size="sm"
                         className="text-red-600 hover:text-red-700"
-                        aria-label={`删除 ${ch.name}`}
+                        aria-label={t('certs.deleteAria', { name: ch.name })}
                         onClick={() => setDeleting(ch)}
                       >
                         <Trash2 className="size-3.5" />
@@ -348,21 +350,21 @@ export default function AlertsPage() {
         {channelDialog && (
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>{channelDialog.mode === 'create' ? '添加告警渠道' : `编辑 ${channelDialog.ch?.name}`}</DialogTitle>
-              <DialogDescription>群机器人的 Webhook 地址,可发送测试消息验证</DialogDescription>
+              <DialogTitle>{channelDialog.mode === 'create' ? t('alerts.addChannel') : t('alerts.editChannel', { name: channelDialog.ch?.name ?? '' })}</DialogTitle>
+              <DialogDescription>{t('alerts.channelDesc')}</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-2">
               <div className="grid gap-2">
-                <Label htmlFor="ch-name">名称</Label>
+                <Label htmlFor="ch-name">{t('common.name')}</Label>
                 <Input
                   id="ch-name"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="运维值班群"
+                  placeholder={t('alerts.namePlaceholder')}
                 />
               </div>
               <div className="grid gap-2">
-                <Label>类型</Label>
+                <Label>{t('alerts.typeHead')}</Label>
                 <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as AlertChannelType })}>
                   <SelectTrigger>
                     <SelectValue />
@@ -377,7 +379,7 @@ export default function AlertsPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="ch-url">Webhook 地址</Label>
+                <Label htmlFor="ch-url">{t('alerts.webhookLabel')}</Label>
                 <Input
                   id="ch-url"
                   value={form.webhookUrl}
@@ -391,19 +393,19 @@ export default function AlertsPage() {
                   checked={form.enabled}
                   onCheckedChange={(v) => setForm({ ...form, enabled: v })}
                 />
-                <Label htmlFor="ch-enabled">启用</Label>
+                <Label htmlFor="ch-enabled">{t('instances.enabledLabel')}</Label>
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setChannelDialog(null)}>
-                取消
+                {t('common.cancel')}
               </Button>
               <Button
                 disabled={saveChannel.isPending || form.name === '' || form.webhookUrl === ''}
                 onClick={() => saveChannel.mutate({ form, id: channelDialog.mode === 'edit' ? channelDialog.ch?.id : undefined })}
               >
                 {saveChannel.isPending && <Loader2 className="mr-1 size-4 animate-spin" />}
-                保存
+                {t('common.save')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -413,12 +415,12 @@ export default function AlertsPage() {
       <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>删除告警渠道</DialogTitle>
-            <DialogDescription>确定删除渠道「{deleting?.name}」?</DialogDescription>
+            <DialogTitle>{t('alerts.deleteChannelTitle')}</DialogTitle>
+            <DialogDescription>{t('alerts.deleteChannelDesc', { name: deleting?.name ?? '' })}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleting(null)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -426,7 +428,7 @@ export default function AlertsPage() {
               onClick={() => deleting && deleteChannel.mutate(deleting.id)}
             >
               {deleteChannel.isPending && <Loader2 className="mr-1 size-4 animate-spin" />}
-              删除
+              {t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

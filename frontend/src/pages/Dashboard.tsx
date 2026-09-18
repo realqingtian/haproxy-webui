@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, Info, Server, XCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -16,12 +17,13 @@ interface HealthResponse {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: '管理员',
-  operator: '操作员',
-  viewer: '只读',
+  admin: 'role.admin',
+  operator: 'role.operator',
+  viewer: 'role.viewer',
 }
 
 export default function DashboardPage() {
+  const { t } = useTranslation()
   const me = getCachedUser()
   const health = useQuery({
     queryKey: ['health'],
@@ -45,7 +47,7 @@ export default function DashboardPage() {
   // 按集群分组展示(keepalived 主备归组);未归组的实例排在最后
   const clusterList = clusters.data ?? []
   const clusterName = (id: number | null | undefined) =>
-    clusterList.find((c) => c.id === id)?.name ?? '未分组'
+    clusterList.find((c) => c.id === id)?.name ?? t('common.ungrouped')
   const instanceGroups = new Map<string, InstanceHealth[]>()
   for (const i of [...instanceList].sort(
     (a, b) => (a.clusterId ?? 0) - (b.clusterId ?? 0),
@@ -57,63 +59,63 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">仪表盘</h1>
-        <p className="text-sm text-muted-foreground">系统状态总览</p>
+        <h1 className="text-2xl font-bold">{t('nav.dashboard')}</h1>
+        <p className="text-sm text-muted-foreground">{t('dashboard.subtitle')}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>后端服务</CardDescription>
+            <CardDescription>{t('dashboard.backend')}</CardDescription>
             <CardTitle className="flex items-center gap-2 text-lg">
               {health.isLoading ? (
-                '检测中…'
+                t('dashboard.checking')
               ) : backendUp ? (
                 <>
-                  <CheckCircle2 className="size-5 text-green-600" /> 运行中
+                  <CheckCircle2 className="size-5 text-green-600" />{t('dashboard.running')}
                 </>
               ) : (
                 <>
-                  <XCircle className="size-5 text-red-600" /> 不可达
+                  <XCircle className="size-5 text-red-600" />{t('dashboard.unreachable')}
                 </>
               )}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            每 15 秒自动探测 /api/health
+            {t('dashboard.healthNote')}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>当前用户</CardDescription>
+            <CardDescription>{t('dashboard.currentUser')}</CardDescription>
             <CardTitle className="flex items-center gap-2 text-lg">
-              {me?.username ?? '未知'}
-              <Badge variant="secondary">{ROLE_LABELS[me?.role ?? ''] ?? me?.role}</Badge>
+              {me?.username ?? t('dashboard.unknown')}
+              <Badge variant="secondary">{t(ROLE_LABELS[me?.role ?? ''] ?? me?.role)}</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            权限由后端 RBAC 强制约束
+            {t('dashboard.rbacNote')}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>HAProxy 实例健康</CardDescription>
+            <CardDescription>{t('dashboard.instanceHealth')}</CardDescription>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Server className="size-5 text-primary" />
-              {instances.isLoading ? '—' : `${upCount}/${instanceList.length} 在线`}
+              {instances.isLoading ? '—' : `${upCount}/${instanceList.length} ${t('common.online')}`}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {instances.isLoading ? (
-              <span className="text-xs text-muted-foreground">探测中…</span>
+              <span className="text-xs text-muted-foreground">{t('dashboard.probing')}</span>
             ) : instanceList.length === 0 ? (
-              <span className="text-xs text-muted-foreground">尚未添加实例</span>
+              <span className="text-xs text-muted-foreground">{t('dashboard.noInstances')}</span>
             ) : (
               [...instanceGroups.entries()].map(([group, items]) => (
                 <div key={group} className="space-y-1.5">
-                  {group !== '未分组' && (
+                  {group !== t('common.ungrouped') && (
                     <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                       {group}
                     </div>
@@ -122,9 +124,9 @@ export default function DashboardPage() {
                     <div key={i.id} className="flex items-center justify-between text-xs">
                       <span className="font-medium">{i.name}</span>
                       {i.ok ? (
-                        <Badge className="bg-green-600">在线</Badge>
+                        <Badge className="bg-green-600">{t('common.online')}</Badge>
                       ) : (
-                        <Badge variant="destructive">不可达</Badge>
+                        <Badge variant="destructive">{t('dashboard.unreachable')}</Badge>
                       )}
                     </div>
                   ))}
@@ -139,11 +141,10 @@ export default function DashboardPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Info className="size-4 text-blue-500" />
-            提示
+            {t('dashboard.tipTitle')}
           </CardTitle>
           <CardDescription>
-            实例的配置管理从「实例管理 → 配置」或侧边栏「配置管理」进入;
-            后续迭代规划见 docs/ROADMAP.md,完成记录见 PLAN.md。
+            {t('dashboard.tipBody')}
           </CardDescription>
         </CardHeader>
       </Card>

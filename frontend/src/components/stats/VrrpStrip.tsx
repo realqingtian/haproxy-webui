@@ -1,13 +1,14 @@
 import { Loader2, RefreshCw } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { ClusterVRRP, VrrpNode } from '@/types'
 
 const ROLE_META: Record<VrrpNode['role'], { label: string; badgeClass: string }> = {
-  master: { label: '主', badgeClass: 'bg-green-600' },
-  backup: { label: '备', badgeClass: 'bg-sky-600' },
-  fault: { label: '故障', badgeClass: 'bg-red-600' },
-  unknown: { label: '未探测', badgeClass: '' },
+  master: { label: 'vrrp.master', badgeClass: 'bg-green-600' },
+  backup: { label: 'vrrp.backup', badgeClass: 'bg-sky-600' },
+  fault: { label: 'vrrp.fault', badgeClass: 'bg-red-600' },
+  unknown: { label: 'vrrp.unknown', badgeClass: '' },
 }
 
 // 集群卡片内的 VRRP 状态条:VIP + 各节点主 / 备 / 故障角色(数据来自 GET /clusters/:id/vrrp)。
@@ -20,6 +21,7 @@ export function VrrpStrip({
   loading: boolean
   onRefresh: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border bg-muted/40 px-3 py-2">
       <span className="text-xs font-semibold text-muted-foreground">VRRP</span>
@@ -31,11 +33,11 @@ export function VrrpStrip({
       {loading && !data ? (
         <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
-          正在探测…
+          {t('vrrp.probing')}
         </span>
       ) : data ? (
         data.nodes.length === 0 ? (
-          <span className="text-xs text-muted-foreground">组内暂无启用实例</span>
+          <span className="text-xs text-muted-foreground">{t('vrrp.noInstances')}</span>
         ) : (
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             {data.nodes.map((n) => {
@@ -48,10 +50,10 @@ export function VrrpStrip({
                 >
                   <span className="font-medium">{n.name}</span>
                   {meta.badgeClass ? (
-                    <Badge className={meta.badgeClass}>{meta.label}</Badge>
+                    <Badge className={meta.badgeClass}>{t(meta.label)}</Badge>
                   ) : (
                     <span className="text-xs text-muted-foreground">
-                      {n.probeable ? '探测失败' : '未配置 SSH'}
+                      {n.probeable ? t('vrrp.probeFailed') : t('vrrp.noSsh')}
                     </span>
                   )}
                 </span>
@@ -60,13 +62,13 @@ export function VrrpStrip({
           </span>
         )
       ) : (
-        <span className="text-xs text-muted-foreground">VRRP 状态不可用</span>
+        <span className="text-xs text-muted-foreground">{t('vrrp.unavailable')}</span>
       )}
       <Button
         variant="ghost"
         size="sm"
         className="ml-auto h-7 px-2"
-        aria-label="刷新 VRRP 状态"
+        aria-label={t('vrrp.refresh')}
         disabled={loading}
         onClick={onRefresh}
       >
