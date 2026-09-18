@@ -26,8 +26,15 @@ type instanceRequest struct {
 	Username   string `json:"username" binding:"required"`
 	Password   string `json:"password"`
 	Enabled    *bool  `json:"enabled"`
-	ClusterID  *uint  `json:"clusterId"` // 归属集群,可空(null/缺省 = 未分组)
+	ClusterID  *uint  `json:"clusterId"`  // 归属集群,可空(null/缺省 = 未分组)
 	MetricsURL string `json:"metricsUrl"` // Prometheus metrics 基地址,可空(按 8404 推导)
+	// v0.7 服务管理(可选):SSH 连接信息;密码 / 私钥留空表示保持不变
+	SSHHost       string `json:"sshHost"`
+	SSHPort       int    `json:"sshPort"` // 0 → 22
+	SSHUser       string `json:"sshUser"`
+	SSHPassword   string `json:"sshPassword"`
+	SSHPrivateKey string `json:"sshPrivateKey"`
+	SSHUnit       string `json:"sshUnit"`
 }
 
 func (h *InstanceHandler) List(c *gin.Context) {
@@ -55,12 +62,39 @@ func (h *InstanceHandler) Create(c *gin.Context) {
 		return
 	}
 	inst.Password = encPassword
+	if err := applySSHRequest(&inst, &req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "凭据加密失败: " + err.Error()})
+		return
+	}
 	if err := h.db.Create(&inst).Error; err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "instance name may already exist: " + err.Error()})
 		return
 	}
 	audit(c, "instance.create", req.Name, req.BaseURL)
 	c.JSON(http.StatusCreated, inst)
+}
+
+// applySSHRequest 把请求中的 SSH 字段落到实例(凭据加密;留空=新建忽略/编辑保持)。
+func applySSHRequest(inst *model.Instance, req *instanceRequest) error {
+	inst.SSHHost = req.SSHHost
+	inst.SSHPort = req.SSHPort
+	inst.SSHUser = req.SSHUser
+	inst.SSHUnit = req.SSHUnit
+	if req.SSHPassword != "" {
+		enc, err := cryptoutil.EncryptStored(req.SSHPassword)
+		if err != nil {
+			return err
+		}
+		inst.SSHPassword = enc
+	}
+	if req.SSHPrivateKey != "" {
+		enc, err := cryptoutil.EncryptStored(req.SSHPrivateKey)
+		if err != nil {
+			return err
+		}
+		inst.SSHPrivateKey = enc
+	}
+	return nil
 }
 
 func (h *InstanceHandler) Update(c *gin.Context) {
@@ -77,6 +111,10 @@ func (h *InstanceHandler) Update(c *gin.Context) {
 	inst.Name, inst.BaseURL, inst.Username = req.Name, req.BaseURL, req.Username
 	inst.ClusterID = req.ClusterID // 可置空 = 移出集群
 	inst.MetricsURL = req.MetricsURL
+	if err := applySSHRequest(&inst, &req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "凭据加密失败: " + err.Error()})
+		return
+	}
 	if req.Password != "" { // 留空表示不修改密码
 		encPassword, err := cryptoutil.EncryptStored(req.Password)
 		if err != nil {

@@ -18,19 +18,21 @@ type fakeDataplane struct {
 	user, pw string
 	url      string // httptest server 地址,由 newTestEnv 注入
 
-	version   int64
-	raw       string
-	backends  []string
-	servers   map[string][]string // backend -> server 名
-	frontends []string
-	staged    map[string][]stagedOp // txID -> 待生效操作
-	seq       int                   // 事务序号
-	starts    int
-	commits   int
-	aborts    int
-	lastPush  string             // 最近一次 raw 整体推送(回滚路径)
-	nextReload string             // 下一次 reload 查询返回的状态,默认 succeeded
-	reloadPolls int              // reloads/:id 被查询次数(验证监视器确实在轮询)
+	version       int64
+	raw           string
+	backends      []string
+	servers       map[string][]string // backend -> server 名
+	frontends     []string
+	staged        map[string][]stagedOp     // txID -> 待生效操作
+	certs         map[string]map[string]any // 证书存储:文件名 -> 元数据(模拟 storage ssl_certificates)
+	certsDisabled bool                      // 模拟节点未启用 --ssl-certs-dir(路由 404)
+	seq           int
+	starts        int
+	commits       int
+	aborts        int
+	lastPush      string // 最近一次 raw 整体推送(回滚路径)
+	nextReload    string // 下一次 reload 查询返回的状态,默认 succeeded
+	reloadPolls   int    // reloads/:id 被查询次数(验证监视器确实在轮询)
 }
 
 type stagedOp struct {
@@ -158,6 +160,57 @@ func (f *fakeDataplane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(http.StatusOK, map[string]any{"id": path[strings.LastIndex(path, "/")+1:], "status": status})
 
+	// ---- storage ssl_certificates(v0.7):只在「启用」时模拟,形态对齐 3.4.3 实测 ----
+	case f.certsDisabled && strings.Contains(path, "/storage/ssl_certificates"):
+		writeJSON(http.StatusNotFound, map[string]any{
+			"code": 404, "message": "path " + path + " was not found",
+		})
+
+	case r.Method == http.MethodGet && path == "/v3/services/haproxy/storage/ssl_certificates":
+		list := make([]map[string]any, 0, len(f.certs))
+		for _, m := range f.certs {
+			list = append(list, m)
+		}
+		writeJSON(http.StatusOK, list)
+
+	case r.Method == http.MethodPost && path == "/v3/services/haproxy/storage/ssl_certificates":
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			writeJSON(http.StatusBadRequest, map[string]any{"code": 400, "message": "bad multipart"})
+			return
+		}
+		file, hdr, err := r.FormFile("file_upload")
+		if err != nil {
+			writeJSON(http.StatusBadRequest, map[string]any{"code": 400, "message": "missing file_upload"})
+			return
+		}
+		content, _ := io.ReadAll(file)
+		_ = file.Close()
+		if !strings.Contains(string(content), "BEGIN CERTIFICATE") {
+			writeJSON(http.StatusInternalServerError, map[string]any{"code": 500, "message": "failed to parse certificate"})
+			return
+		}
+		if _, ok := f.certs[hdr.Filename]; ok {
+			writeJSON(http.StatusConflict, map[string]any{"code": 409, "message": "already exists"})
+			return
+		}
+		meta := map[string]any{
+			"storage_name": hdr.Filename, "description": "managed SSL file",
+			"subject": "CN=test.local", "size": len(content),
+		}
+		f.certs[hdr.Filename] = meta
+		writeJSON(http.StatusCreated, meta)
+
+	case r.Method == http.MethodDelete && strings.HasPrefix(path, "/v3/services/haproxy/storage/ssl_certificates/"):
+		name := strings.TrimPrefix(path, "/v3/services/haproxy/storage/ssl_certificates/")
+		if _, ok := f.certs[name]; !ok {
+			writeJSON(http.StatusNotFound, map[string]any{"code": 404, "message": "missing object"})
+			return
+		}
+		delete(f.certs, name)
+		// 与真实行为一致:删除后触发 reload,202 + Reload-ID
+		w.Header().Set("Reload-Id", "reload-cert-del")
+		w.WriteHeader(http.StatusAccepted)
+
 	case r.Method == http.MethodGet && strings.HasSuffix(path, "/binds"):
 		writeJSON(http.StatusOK, []map[string]any{})
 
@@ -178,7 +231,9 @@ func (f *fakeDataplane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(http.StatusNotFound, map[string]any{"error": "unknown endpoint " + path})
 
 	case r.Method == http.MethodPost && strings.HasSuffix(path, "/configuration/backends"):
-		var body struct{ Name string `json:"name"` }
+		var body struct {
+			Name string `json:"name"`
+		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		if f.backendExists(body.Name, r.URL.Query().Get("transaction_id")) {
 			writeJSON(http.StatusBadRequest, map[string]any{"error": "backend already exists: " + body.Name})

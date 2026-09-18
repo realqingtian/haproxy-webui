@@ -33,9 +33,11 @@ export function canWrite(): boolean {
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  hint?: string // 后端附加的可操作提示(如节点未启用证书存储)
+  constructor(status: number, message: string, hint?: string) {
     super(message)
     this.status = status
+    this.hint = hint
   }
 }
 
@@ -59,8 +61,8 @@ export async function api<T>(
   }
   const body = await resp.json().catch(() => null)
   if (!resp.ok) {
-    const message = (body as { error?: string } | null)?.error ?? `请求失败 (${resp.status})`
-    throw new ApiError(resp.status, message)
+    const payload = body as { error?: string; hint?: string } | null
+    throw new ApiError(resp.status, payload?.error ?? `请求失败 (${resp.status})`, payload?.hint)
   }
   return body as T
 }

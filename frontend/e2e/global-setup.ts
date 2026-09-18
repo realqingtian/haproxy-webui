@@ -8,9 +8,10 @@ export default function globalSetup() {
   const here = dirname(fileURLToPath(import.meta.url))
   const composeFile = resolve(here, '../../deploy/dataplaneapi/local-e2e/docker-compose.yml')
   try {
-    execSync(`docker compose -f "${composeFile}" up -d --wait`, {
+    // --build:镜像里 COPY 了 start.sh 等源文件,源码改动后必须重建(层缓存,秒级)
+    execSync(`docker compose -f "${composeFile}" up -d --build --wait`, {
       stdio: 'inherit',
-      timeout: 180_000,
+      timeout: 300_000,
     })
   } catch (err) {
     throw new Error(

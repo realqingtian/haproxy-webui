@@ -43,9 +43,23 @@ type Instance struct {
 	ClusterID *uint     `gorm:"index" json:"clusterId"` // 归属集群(M5-3),可空
 	// MetricsURL 是 Prometheus metrics 基地址(如 http://10.0.0.1:8404),空则按 BaseURL host 的 8404 端口推导
 	MetricsURL string    `gorm:"size:255" json:"metricsUrl"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	// v0.7 服务管理:可选 SSH 连接,用于查询 dataplaneapi 服务状态与远程重启。
+	// SSHHost 空则取 BaseURL host;SSHPort 不加 default 标签(避免 gorm 吞零值),0 视为 22;
+	// SSHPassword / SSHPrivateKey 为 AES-GCM 密文(与 Password 同机制);SSHUnit 空 → dataplaneapi
+	SSHHost       string    `gorm:"size:255" json:"sshHost"`
+	// SSHPort 不用纯 not null:SQLite 存量表加 NOT NULL 无默认列会迁移失败,须带 default:0
+	// (0 视为 22;default 标签对 int 零值无 v0.6 bool 吞 false 的坑)
+	SSHPort       int       `gorm:"not null;default:0" json:"sshPort"`
+	SSHUser       string    `gorm:"size:64" json:"sshUser"`
+	SSHPassword   string    `json:"-"`
+	SSHPrivateKey string    `json:"-"`
+	SSHUnit       string    `gorm:"size:64" json:"sshUnit"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
 }
+
+// SSHConfigured 是否配置了服务管理所需的 SSH 连接(以 SSHUser 非空为准)。
+func (i *Instance) SSHConfigured() bool { return i.SSHUser != "" }
 
 // Cluster 是实例的逻辑分组(如一组 keepalived 主备),VIP 与主备状态探测为后续扩展点。
 type Cluster struct {

@@ -93,6 +93,10 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 				instances.GET("/:id/metrics-probe", nodeHandler.MetricsProbe)
 				instances.GET("/:id/acls", nodeHandler.ListNodeACLs)
 				instances.GET("/:id/reloads/:reloadId", nodeHandler.ReloadStatus)
+				// v0.7 SSL 证书管理:元数据查看登录即可,上传 / 删除需 operator+
+				instances.GET("/:id/certs", nodeHandler.ListSSLCerts)
+				// v0.7 服务管理:状态查询登录即可,重启需 operator+
+				instances.GET("/:id/service", nodeHandler.ServiceStatus)
 				// 写操作需要 operator 及以上角色
 				write := instances.Group("", auth.RequireRole(model.RoleAdmin, model.RoleOperator))
 				{
@@ -107,6 +111,11 @@ func NewRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 					write.POST("/:id/config/preview", nodeHandler.PreviewOps)
 					write.POST("/:id/config/sync", nodeHandler.SyncRevision)
 					write.POST("/:id/config/revisions/:revId/rollback", nodeHandler.RollbackRevision)
+					// v0.7 SSL 证书管理:上传 / 删除(operator+)
+					write.POST("/:id/certs", nodeHandler.UploadSSLCert)
+					write.DELETE("/:id/certs/:name", nodeHandler.DeleteSSLCert)
+					// v0.7 服务管理:远程重启 dataplaneapi(operator+)
+					write.POST("/:id/service/restart", nodeHandler.ServiceRestart)
 				}
 			}
 

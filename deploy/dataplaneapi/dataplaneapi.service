@@ -17,14 +17,15 @@ Wants=network-online.target
 Type=simple
 User=dpapi
 Group=dpapi
-# 事务与 spoe 临时目录属主(以 root 前置执行)
-ExecStartPre=+/bin/sh -c "mkdir -p /tmp/spoe-haproxy /tmp/haproxy && chown -R dpapi:dpapi /tmp/spoe-haproxy /tmp/haproxy"
+# 事务与 spoe 临时目录属主(以 root 前置执行);证书目录供 WebUI「证书管理」使用
+ExecStartPre=+/bin/sh -c "mkdir -p /tmp/spoe-haproxy /tmp/haproxy && chown -R dpapi:dpapi /tmp/spoe-haproxy /tmp/haproxy && mkdir -p /etc/haproxy/ssl && chown dpapi:dpapi /etc/haproxy/ssl"
 ExecStart=/usr/local/bin/dataplaneapi \
     --config-file /etc/haproxy/haproxy.cfg \
     --userlist dataplaneapi \
     --host 0.0.0.0 \
     --port 5555 \
     --haproxy-bin /usr/sbin/haproxy \
+    --ssl-certs-dir /etc/haproxy/ssl \
     --reload-cmd "sudo systemctl reload haproxy" \
     --restart-cmd "sudo systemctl restart haproxy"
 EnvironmentFile=-/etc/default/dataplaneapi

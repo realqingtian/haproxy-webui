@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ClipboardList, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { ClipboardList, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -26,6 +27,7 @@ import { api, apiText, ApiError, canWrite } from '@/lib/api'
 import type {
   ACLView,
   AdminState,
+  BackendView,
   ConfigOp,
   Instance,
   InstanceConfig,
@@ -34,6 +36,8 @@ import type {
 import { AclDialog, BackendDialog, FrontendDialog, ServerDialog } from '@/components/config/dialogs'
 import { TemplateDialog } from '@/components/config/TemplateDialog'
 import { RevisionsTab } from '@/components/config/RevisionsTab'
+import { RawConfigView } from '@/components/config/RawConfigView'
+import { CertsTab } from '@/components/config/CertsTab'
 import { StagingDialog, type StagedItem } from '@/components/config/StagingDialog'
 
 const ADMIN_STATE_LABELS: Record<AdminState, string> = {
@@ -60,6 +64,7 @@ export default function InstanceConfigPage() {
   const [templateOpen, setTemplateOpen] = useState(false)
   const [staged, setStaged] = useState<StagedItem[]>([])
   const [stagingOpen, setStagingOpen] = useState(false)
+  const [search, setSearch] = useState('')
   const keySeq = useRef(0)
 
   // 暂存与实例绑定:切换实例即清空,避免把 A 实例的操作应用到 B 实例
@@ -137,6 +142,33 @@ export default function InstanceConfigPage() {
   const instanceName = instances.data?.find((i) => String(i.id) === id)?.name ?? `实例 ${id}`
   const backendNames = (config.data?.backends ?? []).map((b) => b.name)
 
+  // 配置搜索(大小写不敏感):backend 卡片按名称或其服务器名称/地址过滤(仅保留命中的服务器行),
+  // frontend 行按名称/默认后端/监听地址过滤;原始配置页签内做逐行高亮与跳转
+  const q = search.trim().toLowerCase()
+  const visibleBackends = useMemo(() => {
+    const all = config.data?.backends ?? []
+    if (!q) return all
+    return all
+      .map((b) => {
+        if (b.name.toLowerCase().includes(q)) return b
+        const servers = b.servers.filter(
+          (s) => s.name.toLowerCase().includes(q) || s.address.toLowerCase().includes(q),
+        )
+        return servers.length > 0 ? { ...b, servers } : null
+      })
+      .filter((b): b is BackendView => b !== null)
+  }, [config.data, q])
+  const visibleFrontends = useMemo(() => {
+    const all = config.data?.frontends ?? []
+    if (!q) return all
+    return all.filter(
+      (f) =>
+        f.name.toLowerCase().includes(q) ||
+        f.defaultBackend.toLowerCase().includes(q) ||
+        f.binds.some((b) => `${b.address}:${b.port ?? '*'}`.toLowerCase().includes(q)),
+    )
+  }, [config.data, q])
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -188,9 +220,34 @@ export default function InstanceConfigPage() {
           <TabsList>
             <TabsTrigger value="backends">后端与服务器</TabsTrigger>
             <TabsTrigger value="frontends">前端</TabsTrigger>
+            <TabsTrigger value="certs">证书</TabsTrigger>
             <TabsTrigger value="revisions">版本历史</TabsTrigger>
             <TabsTrigger value="raw">原始配置</TabsTrigger>
           </TabsList>
+
+          {/* ---- 配置搜索 ---- */}
+          <div className="relative max-w-md">
+            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setSearch('')
+              }}
+              placeholder="搜索 backend / frontend / server,原始配置中定位并跳转"
+              className="pl-8 pr-8"
+            />
+            {search && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-0.5 top-1/2 size-7 -translate-y-1/2 p-0 text-muted-foreground"
+                onClick={() => setSearch('')}
+              >
+                <X className="size-4" />
+              </Button>
+            )}
+          </div>
 
           {/* ---- 后端与服务器 ---- */}
           <TabsContent value="backends" className="space-y-4">
@@ -206,7 +263,14 @@ export default function InstanceConfigPage() {
                 </Button>
               </div>
             )}
-            {(config.data?.backends ?? []).map((b) => (
+            {q && visibleBackends.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6 text-sm text-muted-foreground">
+                  无匹配「{search.trim()}」的 backend 或服务器
+                </CardContent>
+              </Card>
+            ) : (
+              visibleBackends.map((b) => (
               <Card key={b.name}>
                 <CardHeader className="flex flex-row items-center justify-between pb-3">
                   <CardTitle className="text-base font-semibold">backend {b.name}</CardTitle>
@@ -273,7 +337,8 @@ export default function InstanceConfigPage() {
                   )}
                 </CardContent>
               </Card>
-            ))}
+              ))
+            )}
           </TabsContent>
 
           {/* ---- 前端 ---- */}
@@ -299,7 +364,14 @@ export default function InstanceConfigPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(config.data?.frontends ?? []).map((f) => (
+                    {visibleFrontends.length === 0 && q ? (
+                      <TableRow>
+                        <TableCell colSpan={writable ? 4 : 3} className="text-sm text-muted-foreground">
+                          无匹配「{search.trim()}」的 frontend
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      visibleFrontends.map((f) => (
                       <TableRow key={f.name}>
                         <TableCell className="font-medium">{f.name}</TableCell>
                         <TableCell>
@@ -345,11 +417,17 @@ export default function InstanceConfigPage() {
                           </TableCell>
                         )}
                       </TableRow>
-                    ))}
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ---- 证书 ---- */}
+          <TabsContent value="certs">
+            <CertsTab instanceId={id!} />
           </TabsContent>
 
           {/* ---- 版本历史 ---- */}
@@ -361,9 +439,15 @@ export default function InstanceConfigPage() {
           <TabsContent value="raw">
             <Card>
               <CardContent className="pt-6">
-                <pre className="max-h-[60vh] overflow-auto rounded-md bg-muted p-4 font-mono text-xs leading-relaxed">
-                  {raw.isFetching ? '加载中…' : (raw.data ?? '无法获取原始配置')}
-                </pre>
+                {raw.isFetching && !raw.data ? (
+                  <div className="py-10 text-center text-sm text-muted-foreground">加载中…</div>
+                ) : raw.data ? (
+                  <RawConfigView text={raw.data} query={search} />
+                ) : (
+                  <div className="py-10 text-center text-sm text-muted-foreground">
+                    无法获取原始配置
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

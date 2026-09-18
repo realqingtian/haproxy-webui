@@ -15,15 +15,15 @@ build:
 	cd backend && go build -o haproxy-webui ./cmd/server
 	cd frontend && bun run build
 
-# 提交前的统一检查入口(见 AGENTS.md / docs/git-conventions.md)
+# 提交前的统一检查入口(见 AGENTS.md 的提交工作流)
 test:
 	cd backend && go test ./...
 
 # 容器级集成测试:起 local-e2e 容器(真实 HAProxy + dataplaneapi v3)后跑真实链路用例;
 # 容器不可达时该用例自动跳过,所以 `make test` 无 Docker 也全绿
 test-integration:
-	cd deploy/dataplaneapi/local-e2e && docker compose up -d --wait
-	cd backend && HAPROXY_WEBUI_IT_DPAPI=http://localhost:5555 go test ./internal/api/ -run TestContainerRealDataplaneFlow -v
+	cd deploy/dataplaneapi/local-e2e && docker compose up -d --build --wait
+	cd backend && HAPROXY_WEBUI_IT_DPAPI=http://localhost:5555 go test ./internal/api/ -run 'TestContainerRealDataplaneFlow|TestContainerSSLCertificates' -v
 
 check: test
 	cd backend && go vet ./...

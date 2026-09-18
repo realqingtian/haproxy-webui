@@ -13,6 +13,7 @@ import {
 import { Pagination } from '@/components/ui/pagination'
 import { SummaryCard } from '@/components/stats/SummaryCard'
 import { StatusBadge } from '@/components/stats/StatusBadge'
+import { ServiceManageCard } from '@/components/stats/ServiceManageCard'
 import {
   Table,
   TableBody,
@@ -111,7 +112,10 @@ export default function InstanceStatsPage() {
             <SummaryCard title="出流量" value={fmtBytes(totalBout)} />
           </div>
 
-          <MetricsProbeCard probe={metricsProbe} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <MetricsProbeCard probe={metricsProbe} />
+            <ServiceManageCard instanceId={id!} />
+          </div>
 
           <Card>
             <CardHeader className="pb-3">

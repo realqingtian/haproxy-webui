@@ -1,4 +1,8 @@
 import { test, expect } from '@playwright/test'
+import { execSync } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // 核心链路冒烟:登录 → 实例增删 → 配置读取 → 暂存提交 → 运行时上下线 → 模板创建 → 回滚。
 // 环境由 playwright.config.ts 编排:全新后端(admin/admin123)+ vite dev + local-e2e 容器。
@@ -25,8 +29,8 @@ test('核心链路冒烟', async ({ page }) => {
   await page.getByRole('button', { name: '添加实例' }).click()
   await page.getByLabel('名称').fill('e2e-node')
   await page.getByLabel('地址', { exact: true }).fill('http://localhost:5555')
-  await page.getByLabel('用户名').fill('dataplaneapi')
-  await page.getByLabel('密码').fill('demosecret')
+  await page.getByLabel('用户名', { exact: true }).fill('dataplaneapi')
+  await page.getByLabel('密码', { exact: true }).fill('demosecret')
   await page.getByRole('button', { name: '保存' }).click()
   await expect(page.getByText('e2e-node')).toBeVisible()
 
@@ -128,4 +132,82 @@ test('告警与巡检冒烟', async ({ page }) => {
   await page.getByRole('dialog').getByRole('button', { name: '删除' }).click()
   await expect(page.getByText('渠道已删除')).toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: CHANNEL })).toHaveCount(0)
+})
+
+// v0.7:配置搜索与跳转 + SSL 证书管理 + 服务管理卡片(未配置态)
+test('v0.7 配置搜索与证书冒烟', async ({ page }) => {
+  test.setTimeout(90_000)
+  // 测试证书现场生成,不入库 .pem(遵守 AGENTS 约定);用例结束清理
+  const certDir = mkdtempSync(join(tmpdir(), 'e2e-cert-'))
+  const CERT_PATH = join(certDir, 'test-cert.pem')
+  execSync(
+    `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -keyout "${CERT_PATH}" -out "${CERT_PATH}" -days 30 -nodes -subj '/CN=test.local'`,
+    { stdio: 'ignore' },
+  )
+  const CERT_NAME = `e2e_cert_${UNIQUE}.pem`
+  const NODE = 'e2e-node-v07'
+
+  await page.goto('/login')
+  await page.getByLabel('用户名').fill('admin')
+  await page.getByLabel('密码').fill('admin123')
+  await page.getByRole('button', { name: '登录' }).click()
+  await expect(page).toHaveURL('/')
+
+  // ---- 注册实例 ----
+  await page.getByRole('button', { name: '实例管理' }).click()
+  await page.getByRole('button', { name: '添加实例' }).click()
+  await page.getByLabel('名称').fill(NODE)
+  await page.getByLabel('地址', { exact: true }).fill('http://localhost:5555')
+  await page.getByLabel('用户名', { exact: true }).fill('dataplaneapi')
+  await page.getByLabel('密码', { exact: true }).fill('demosecret')
+  await page.getByRole('button', { name: '保存' }).click()
+  await expect(page.getByText(NODE)).toBeVisible()
+
+  // ---- 配置搜索:过滤 backend ----
+  await page.getByRole('button', { name: '配置管理' }).click()
+  await expect(page.getByRole('heading', { name: /配置管理/ })).toBeVisible()
+  await page.getByPlaceholder(/搜索 backend/).fill('demo_app')
+  await expect(page.getByText('backend demo_app')).toBeVisible()
+  await page.getByPlaceholder(/搜索 backend/).fill('zzz_no_match')
+  await expect(page.getByText(/无匹配「zzz_no_match」/)).toBeVisible()
+
+  // ---- 原始配置:关键字高亮与命中计数 ----
+  await page.getByRole('tab', { name: '原始配置' }).click()
+  await page.getByPlaceholder(/搜索 backend/).fill('listen stats')
+  await expect(page.getByText(/命中 1 行/)).toBeVisible()
+  await expect(page.getByText('listen stats').first()).toBeVisible()
+
+  // ---- 证书:上传 → 列表 → 详情 → 删除 ----
+  await page.getByRole('tab', { name: '证书' }).click()
+  await page.getByRole('button', { name: '上传证书' }).click()
+  await page.getByLabel('选择文件').setInputFiles(CERT_PATH)
+  // 文件名自动填充为文件本名,再改为带时间戳的名字
+  await expect(page.getByLabel('证书文件名')).toHaveValue('test-cert.pem')
+  await page.getByLabel('证书文件名').fill(CERT_NAME)
+  await page.getByRole('dialog').getByRole('button', { name: '上传' }).click()
+  await expect(page.getByText(new RegExp(`证书 ${CERT_NAME} 已上传`))).toBeVisible()
+  const certRow = page.getByRole('row').filter({ hasText: CERT_NAME })
+  await expect(certRow).toBeVisible({ timeout: 10_000 })
+  await certRow.getByRole('button', { name: `查看 ${CERT_NAME}` }).click()
+  await expect(page.getByText(/test\.local/).first()).toBeVisible()
+  await page.getByRole('dialog').press('Escape')
+  await certRow.getByRole('button', { name: `删除 ${CERT_NAME}` }).click()
+  await expect(page.getByText(/原始配置中未发现对该文件名的引用/)).toBeVisible()
+  await page.getByRole('dialog').getByRole('button', { name: '确认删除' }).click()
+  await expect(page.getByText(/证书已删除/)).toBeVisible()
+
+  // ---- 监控页:服务管理卡片未配置态 ----
+  await page.getByRole('button', { name: '实例管理' }).click()
+  await page.getByRole('row').filter({ hasText: NODE }).getByRole('link', { name: '监控' }).click()
+  await expect(page.getByRole('heading', { name: /监控/ })).toBeVisible()
+  await expect(page.getByText(/实例未配置服务管理 SSH/)).toBeVisible()
+
+  // ---- 清理实例 ----
+  await page.getByRole('button', { name: '实例管理' }).click()
+  const delRow = page.getByRole('row').filter({ hasText: NODE })
+  await delRow.locator('button').last().click()
+  await page.getByRole('dialog').getByRole('button', { name: '删除' }).click()
+  await expect(page.getByText('实例已删除')).toBeVisible()
+
+  rmSync(certDir, { recursive: true, force: true })
 })

@@ -23,7 +23,8 @@ kill -USR2 "$(head -1 /var/run/haproxy.pid)"
 EOF
 chmod +x /usr/local/bin/doreload
 
-mkdir -p /var/log
+mkdir -p /var/log /etc/haproxy/ssl
+# v0.7:显式指定 --ssl-certs-dir 才会注册 /v3/storage/ssl_certificates 路由(实测缺省时不注册,404)
 (
     n=0
     while true; do
@@ -31,6 +32,7 @@ mkdir -p /var/log
         echo "$(date '+%F %T') starting dataplaneapi (attempt $n)" >> /var/log/dpapi.log
         dataplaneapi --config-file /etc/haproxy/haproxy.cfg --userlist dataplaneapi \
             --host 0.0.0.0 --port 5555 --haproxy-bin /usr/sbin/haproxy \
+            --ssl-certs-dir /etc/haproxy/ssl \
             --reload-cmd "doreload" \
             --restart-cmd "doreload" < /dev/null >> /var/log/dpapi.log 2>&1
         echo "$(date '+%F %T') dataplaneapi exited code $?" >> /var/log/dpapi.log

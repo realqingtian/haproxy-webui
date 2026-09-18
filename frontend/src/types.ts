@@ -20,8 +20,25 @@ export interface Instance {
   enabled: boolean
   clusterId: number | null
   metricsUrl: string
+  // 服务管理 SSH(v0.7,可选;密码 / 私钥后端不回传)
+  sshHost: string
+  sshPort: number
+  sshUser: string
+  sshUnit: string
   createdAt: string
   updatedAt: string
+}
+
+// GET /instances/:id/service 响应:configured=false 表示实例未配置 SSH
+export interface ServiceStatus {
+  configured: boolean
+  unit?: string
+  activeState?: string
+  subState?: string
+  since?: string
+  pid?: number
+  error?: string
+  hint?: string
 }
 
 export interface MetricsProbeResult {
@@ -37,6 +54,7 @@ export interface Cluster {
   vip: string
   note: string
 }
+
 
 export type AlertChannelType = 'feishu' | 'dingtalk' | 'wecom'
 
@@ -188,4 +206,19 @@ export interface ApplyResult {
 export interface ReloadInfo {
   id: string
   status: 'in_progress' | 'succeeded' | 'failed'
+}
+
+// ---- v0.7 SSL 证书管理 ----
+
+// dataplaneapi storage ssl_certificates 元数据(接口不返回证书内容)
+export interface SSLCert {
+  storage_name: string
+  file: string
+  description: string
+  subject: string
+  issuers: string
+  serial: string
+  not_before: string
+  not_after: string
+  size: number
 }

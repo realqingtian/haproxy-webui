@@ -43,6 +43,13 @@ interface InstanceForm {
   enabled: boolean
   clusterId: number | null
   metricsUrl: string
+  // 服务管理 SSH(可选);端口用字符串承载输入,提交时转数字
+  sshHost: string
+  sshPort: string
+  sshUser: string
+  sshPassword: string
+  sshPrivateKey: string
+  sshUnit: string
 }
 
 const EMPTY_FORM: InstanceForm = {
@@ -53,6 +60,12 @@ const EMPTY_FORM: InstanceForm = {
   enabled: true,
   clusterId: null,
   metricsUrl: '',
+  sshHost: '',
+  sshPort: '',
+  sshUser: '',
+  sshPassword: '',
+  sshPrivateKey: '',
+  sshUnit: '',
 }
 
 export default function InstancesPage() {
@@ -97,6 +110,12 @@ export default function InstancesPage() {
         enabled: v.form.enabled,
         clusterId: v.form.clusterId,
         metricsUrl: v.form.metricsUrl,
+        sshHost: v.form.sshHost,
+        sshPort: Number(v.form.sshPort) || 0,
+        sshUser: v.form.sshUser,
+        sshPassword: v.form.sshPassword,
+        sshPrivateKey: v.form.sshPrivateKey,
+        sshUnit: v.form.sshUnit,
       })
       return v.id
         ? api<Instance>(`/api/instances/${v.id}`, { method: 'PUT', body })
@@ -160,6 +179,12 @@ export default function InstancesPage() {
       enabled: inst.enabled,
       clusterId: inst.clusterId,
       metricsUrl: inst.metricsUrl ?? '',
+      sshHost: inst.sshHost ?? '',
+      sshPort: inst.sshPort ? String(inst.sshPort) : '',
+      sshUser: inst.sshUser ?? '',
+      sshPassword: '',
+      sshPrivateKey: '',
+      sshUnit: inst.sshUnit ?? '',
     })
     setDialogOpen(true)
   }
@@ -321,7 +346,7 @@ export default function InstancesPage() {
 
       {/* 实例新增/编辑对话框 */}
       <Dialog open={dialogOpen} onOpenChange={(v) => !v && setDialogOpen(false)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? '编辑实例' : '添加实例'}</DialogTitle>
             <DialogDescription>
@@ -395,6 +420,78 @@ export default function InstancesPage() {
                 onChange={(e) => setForm({ ...form, metricsUrl: e.target.value })}
                 placeholder="留空则按节点地址的 8404 端口推导"
               />
+            </div>
+
+            {/* 服务管理 SSH(可选):填写后可在监控页查看 dataplaneapi 服务状态并远程重启 */}
+            <div className="rounded-md border p-3">
+              <p className="mb-2 text-xs font-semibold text-muted-foreground">
+                服务管理 SSH(可选)— 用于查看 dataplaneapi 服务状态与远程重启
+              </p>
+              <div className="grid gap-2">
+                <div className="grid grid-cols-[1fr_88px] gap-2">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="inst-ssh-host">SSH 地址</Label>
+                    <Input
+                      id="inst-ssh-host"
+                      value={form.sshHost}
+                      onChange={(e) => setForm({ ...form, sshHost: e.target.value })}
+                      placeholder="留空则取节点地址的 host"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="inst-ssh-port">端口</Label>
+                    <Input
+                      id="inst-ssh-port"
+                      value={form.sshPort}
+                      onChange={(e) => setForm({ ...form, sshPort: e.target.value })}
+                      placeholder="22"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="inst-ssh-user">SSH 用户名</Label>
+                    <Input
+                      id="inst-ssh-user"
+                      value={form.sshUser}
+                      onChange={(e) => setForm({ ...form, sshUser: e.target.value })}
+                      placeholder="root / 专用运维账号"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="inst-ssh-unit">服务 unit 名</Label>
+                    <Input
+                      id="inst-ssh-unit"
+                      value={form.sshUnit}
+                      onChange={(e) => setForm({ ...form, sshUnit: e.target.value })}
+                      placeholder="dataplaneapi"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="inst-ssh-pass">SSH 密码</Label>
+                  <Input
+                    id="inst-ssh-pass"
+                    type="password"
+                    value={form.sshPassword}
+                    onChange={(e) => setForm({ ...form, sshPassword: e.target.value })}
+                    placeholder={editing && form.sshUser ? '留空表示不修改' : '与私钥二选一'}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="inst-ssh-key">SSH 私钥(PEM,可选)</Label>
+                  <textarea
+                    id="inst-ssh-key"
+                    value={form.sshPrivateKey}
+                    onChange={(e) => setForm({ ...form, sshPrivateKey: e.target.value })}
+                    placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..."
+                    className="h-24 w-full rounded-md border border-input bg-transparent p-2 font-mono text-xs"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  重启服务需要该用户对 systemctl restart 具备 sudo 免密权限(NOPASSWD 白名单)
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Switch

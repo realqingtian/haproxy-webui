@@ -61,6 +61,7 @@ func newTestEnvWithDB(t *testing.T) (*gin.Engine, *fakeDataplane, *gorm.DB) {
 		raw:     "# baseline\n",
 		servers: map[string][]string{},
 		staged:  map[string][]stagedOp{},
+		certs:   map[string]map[string]any{},
 	}
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
